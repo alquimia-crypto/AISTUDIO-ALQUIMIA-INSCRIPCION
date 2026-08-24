@@ -58,6 +58,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ChangePinModal } from './ChangePinModal';
+import { SyncModal } from './SyncModal';
 
 export const AdminDashboard: React.FC = () => {
   const [schedules, setSchedules] = useState<SedeHorario[]>([]);
@@ -68,6 +69,7 @@ export const AdminDashboard: React.FC = () => {
   const [searchScheduleTerm, setSearchScheduleTerm] = useState<string>('');
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [showChangePinModal, setShowChangePinModal] = useState<boolean>(false);
+  const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [isSyncingWithSheets, setIsSyncingWithSheets] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -589,13 +591,12 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             <button
-              onClick={handleFetchFromGoogleSheets}
-              disabled={isSyncingWithSheets}
-              className="glass-panel-sm hover:bg-white text-slate-700 text-xs px-3 py-2 rounded-xl font-semibold transition-all border border-slate-200/80 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-              title="Descargar datos frescos desde Google Sheets"
+              onClick={() => setShowSyncModal(true)}
+              className="bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs px-3.5 py-2 rounded-xl font-bold transition-all border border-purple-200 flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              title="Descargar o sincronizar datos desde Google Sheets"
             >
-              <Download className="w-3.5 h-3.5 text-purple-600" />
-              <span>Traer de Sheets</span>
+              <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
+              <span>Sincronizar Sheets</span>
             </button>
           </div>
         </div>
@@ -1193,6 +1194,16 @@ export const AdminDashboard: React.FC = () => {
       <ChangePinModal
         isOpen={showChangePinModal}
         onClose={() => setShowChangePinModal(false)}
+      />
+
+      {/* Google Sheets Sync Modal */}
+      <SyncModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+        onSyncComplete={() => {
+          loadData();
+          setRefreshKey(k => k + 1);
+        }}
       />
 
     </div>

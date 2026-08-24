@@ -100,7 +100,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   setPin(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Ingresa el PIN (ej: 1234)"
+                placeholder="Ingresa el PIN de 4 dígitos"
                 autoFocus
                 className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-center tracking-widest text-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
               />
@@ -112,10 +112,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            
-            <p className="text-[11px] text-slate-500 mt-2 text-center">
-              🔑 PIN inicial por defecto: <strong className="text-indigo-600 font-mono">1234</strong>
-            </p>
           </div>
 
           {/* Error Message */}

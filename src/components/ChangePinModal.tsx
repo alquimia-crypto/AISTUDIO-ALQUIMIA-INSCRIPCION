@@ -115,7 +115,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({
                   setCurrentPin(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Ingresa el PIN actual (por defecto 1234)"
+                placeholder="Ingresa el PIN actual"
                 autoFocus
                 className="w-full pl-10 pr-12 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-center tracking-widest text-base focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
               />

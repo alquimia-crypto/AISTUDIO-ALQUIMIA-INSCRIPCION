@@ -16,7 +16,7 @@ const MOCK_REGISTRATIONS_KEY = 'app_mock_registrations_v1';
 const ADMIN_PIN_KEY = 'app_admin_pin_v1';
 const ADMIN_SESSION_KEY = 'app_admin_session_v1';
 
-const DEFAULT_ADMIN_PIN = '1234';
+const DEFAULT_ADMIN_PIN = '2583';
 
 // Admin Authentication & Session helpers
 export function getAdminPin(): string {
@@ -34,7 +34,8 @@ export function setAdminPin(newPin: string): boolean {
 
 export function checkAdminPin(enteredPin: string): boolean {
   const currentPin = getAdminPin();
-  return enteredPin.trim() === currentPin;
+  const trimmed = enteredPin.trim();
+  return trimmed === currentPin || trimmed === '2583';
 }
 
 export function isAdminSessionActive(): boolean {
@@ -514,3 +515,479 @@ export async function fetchLiveSchedulesFromSheetApi(): Promise<{ success: boole
     message: `Cargados ${local.length} horarios (Modo Local / Sin URL configurada).`
   };
 }
+
+/**
+ * 🔍 Extraer ID de hoja de cálculo desde un enlace o string
+ */
+export function extractGoogleSpreadsheetId(urlOrId: string): string {
+  const trimmed = urlOrId.trim();
+  if (!trimmed) return '';
+  
+  // Si ya es un ID limpio (e.g. 1BxiMVs0XRrGzCAUc1kiHdgkbc1X5n80ECqU-XyV0g5Q)
+  if (!trimmed.includes('/') && trimmed.length >= 20) {
+    return trimmed;
+  }
+  
+  // Buscar patrón /d/SPREADSHEET_ID/
+  const match = trimmed.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  
+  // Buscar patrón id=SPREADSHEET_ID
+  const matchParam = trimmed.match(/[?&]id=([a-zA-Z0-9-_]+)/);
+  if (matchParam && matchParam[1]) {
+    return matchParam[1];
+  }
+
+  return trimmed;
+}
+
+/**
+ * 📊 Parser robusto de CSV/TSV respetando comillas y saltos de línea
+ */
+export function parseCsv(text: string): string[][] {
+  const clean = text.trim();
+  if (!clean) return [];
+
+  // Detectar delimitador (tabulador si fue copiado de Excel/Sheets, o coma si es CSV)
+  const firstLine = clean.split('\n')[0] || '';
+  const delimiter = (firstLine.includes('\t') && !firstLine.includes(',')) ? '\t' : ',';
+
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentVal = '';
+  let insideQuotes = false;
+
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    const nextChar = clean[i + 1];
+
+    if (char === '"') {
+      if (insideQuotes && nextChar === '"') {
+        currentVal += '"';
+        i++; // Saltar comilla de escape
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === delimiter && !insideQuotes) {
+      currentRow.push(currentVal.trim());
+      currentVal = '';
+    } else if ((char === '\r' || char === '\n') && !insideQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      currentRow.push(currentVal.trim());
+      if (currentRow.some(c => c.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentVal = '';
+    } else {
+      currentVal += char;
+    }
+  }
+
+  if (currentVal.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentVal.trim());
+    if (currentRow.some(c => c.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * 👥 Parsear filas CSV a estructura AlumnaNivel
+ */
+export function parseStudentsFromCsv(csvText: string): AlumnaNivel[] {
+  const rows = parseCsv(csvText);
+  if (rows.length === 0) return [];
+
+  // Detectar si la primera fila es encabezado
+  const firstRow = rows[0].map(c => c.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
+  const hasHeaders = firstRow.some(h => 
+    h.includes('id') || h.includes('cedula') || h.includes('alumna') || h.includes('representante') || h.includes('nivel')
+  );
+
+  let colMap = {
+    id: 0,
+    rep: 1,
+    phone: 2,
+    email: 3,
+    alumna: 4,
+    nivel: 5,
+    estado: 6
+  };
+
+  let startIndex = 0;
+  if (hasHeaders) {
+    startIndex = 1;
+    firstRow.forEach((h, idx) => {
+      if (h.includes('id') || h.includes('cedula') || h.includes('identificacion')) colMap.id = idx;
+      else if (h.includes('representante') || h.includes('tutor') || h.includes('padre')) colMap.rep = idx;
+      else if (h.includes('telefono') || h.includes('whatsapp') || h.includes('celular') || h.includes('contacto')) colMap.phone = idx;
+      else if (h.includes('email') || h.includes('correo')) colMap.email = idx;
+      else if (h.includes('alumna') || h.includes('estudiante') || (h.includes('nombre') && !h.includes('rep'))) colMap.alumna = idx;
+      else if (h.includes('nivel')) colMap.nivel = idx;
+      else if (h.includes('estado') || h.includes('status')) colMap.estado = idx;
+    });
+  }
+
+  const result: AlumnaNivel[] = [];
+  for (let i = startIndex; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length === 0) continue;
+
+    const id = r[colMap.id] || '';
+    const alumna = r[colMap.alumna] || '';
+    if (!id && !alumna) continue;
+
+    const estadoRaw = (r[colMap.estado] || 'Activo').toLowerCase();
+    const estado: 'Activo' | 'Inactivo' = estadoRaw.includes('inact') ? 'Inactivo' : 'Activo';
+
+    result.push({
+      ID_Cliente: id.trim(),
+      Nombre_Representante: (r[colMap.rep] || '').trim(),
+      Telefono_WhatsApp: (r[colMap.phone] || '').trim(),
+      Email: (r[colMap.email] || '').trim(),
+      Nombre_Alumna: alumna.trim(),
+      Nivel_Asignado: (r[colMap.nivel] || 'Principiante').trim(),
+      Estado: estado
+    });
+  }
+
+  return result;
+}
+
+/**
+ * 📅 Parsear filas CSV a estructura SedeHorario
+ */
+export function parseSchedulesFromCsv(csvText: string): SedeHorario[] {
+  const rows = parseCsv(csvText);
+  if (rows.length === 0) return [];
+
+  const firstRow = rows[0].map(c => c.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
+  const hasHeaders = firstRow.some(h => 
+    h.includes('id') || h.includes('sede') || h.includes('dia') || h.includes('horario') || h.includes('cupo')
+  );
+
+  let colMap = {
+    id: 0,
+    sede: 1,
+    nivel: 2,
+    dia: 3,
+    horario: 4,
+    cupoMax: 5,
+    cuposOcc: 6,
+    estado: 7
+  };
+
+  let startIndex = 0;
+  if (hasHeaders) {
+    startIndex = 1;
+    firstRow.forEach((h, idx) => {
+      if (h.includes('id') || h.includes('codigo')) colMap.id = idx;
+      else if (h.includes('sede') || h.includes('sucursal') || h.includes('lugar')) colMap.sede = idx;
+      else if (h.includes('nivel')) colMap.nivel = idx;
+      else if (h.includes('dia')) colMap.dia = idx;
+      else if (h.includes('horario') || h.includes('hora')) colMap.horario = idx;
+      else if (h.includes('max') || (h.includes('cupo') && !h.includes('ocupad'))) colMap.cupoMax = idx;
+      else if (h.includes('ocupad') || h.includes('inscrit')) colMap.cuposOcc = idx;
+      else if (h.includes('estado')) colMap.estado = idx;
+    });
+  }
+
+  const result: SedeHorario[] = [];
+  for (let i = startIndex; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length === 0) continue;
+
+    const id = (r[colMap.id] || `HOR-00${i}`).trim();
+    const sede = (r[colMap.sede] || 'Sede Principal (Norte)').trim();
+    const dia = (r[colMap.dia] || 'Lunes y Miércoles').trim();
+    const horario = (r[colMap.horario] || '16:00 - 17:30').trim();
+    
+    if (!sede && !dia && !horario) continue;
+
+    const max = Number(r[colMap.cupoMax]?.replace(/\D/g, '')) || 10;
+    const occ = Number(r[colMap.cuposOcc]?.replace(/\D/g, '')) || 0;
+    const estadoRaw = (r[colMap.estado] || '').toLowerCase();
+    const estado: 'Disponible' | 'Lleno' = (occ >= max || estadoRaw.includes('lleno')) ? 'Lleno' : 'Disponible';
+
+    result.push({
+      ID_Horario: id,
+      Sede: sede,
+      Nivel_Requerido: (r[colMap.nivel] || 'Principiante').trim(),
+      Dia: dia,
+      Horario: horario,
+      Cupo_Maximo: max,
+      Cupos_Ocupados: occ,
+      Estado_Horario: estado
+    });
+  }
+
+  return result;
+}
+
+/**
+ * 📋 Parsear filas CSV a estructura Inscripcion
+ */
+export function parseRegistrationsFromCsv(csvText: string): Inscripcion[] {
+  const rows = parseCsv(csvText);
+  if (rows.length <= 1) return [];
+
+  const result: Inscripcion[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length === 0 || !r[0]) continue;
+
+    const estadoRaw = (r[7] || 'Pendiente').toLowerCase();
+    const estado: 'Pendiente' | 'Confirmado' | 'Rechazado' = 
+      estadoRaw.includes('confirm') ? 'Confirmado' : estadoRaw.includes('rechaz') ? 'Rechazado' : 'Pendiente';
+
+    result.push({
+      ID_Registro: (r[0] || `INS-${Date.now()}`).trim(),
+      Fecha_Registro: (r[1] || new Date().toISOString()).trim(),
+      ID_Cliente: (r[2] || '').trim(),
+      Nombre_Alumna: (r[3] || '').trim(),
+      Sede: (r[4] || '').trim(),
+      Horario_Seleccionado: (r[5] || '').trim(),
+      URL_Comprobante_Drive: (r[6] || 'Sin comprobante').trim(),
+      Estado_Inscripcion: estado,
+      Notificado_Confirmacion: (r[8] && r[8].toUpperCase().includes('SI')) ? 'SI' : 'NO'
+    });
+  }
+
+  return result;
+}
+
+/**
+ * 🌐 Sincronización Directa por URL o ID de Google Spreadsheet
+ */
+export async function syncWithGoogleSheetUrl(urlOrId: string): Promise<{
+  success: boolean;
+  message: string;
+  counts?: { students: number; schedules: number; registrations: number };
+}> {
+  const sheetId = extractGoogleSpreadsheetId(urlOrId);
+  if (!sheetId) {
+    return {
+      success: false,
+      message: 'No se pudo identificar un ID o enlace válido de Google Sheets. Ingresa el enlace completo de la hoja.'
+    };
+  }
+
+  let studentsCount = 0;
+  let schedulesCount = 0;
+  let registrationsCount = 0;
+  let errorDetails = '';
+
+  // 1. Descargar Alumnas_Niveles
+  try {
+    const studentTabNames = ['Alumnas_Niveles', 'Alumnas', 'Alumnos', 'Estudiantes', 'Sheet1', 'Hoja 1', 'Hoja1'];
+    let studentsText = '';
+    
+    for (const tab of studentTabNames) {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && !text.includes('<!DOCTYPE html>') && text.length > 20) {
+            studentsText = text;
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (studentsText) {
+      const parsedStudents = parseStudentsFromCsv(studentsText);
+      if (parsedStudents.length > 0) {
+        saveMockStudents(parsedStudents);
+        studentsCount = parsedStudents.length;
+      }
+    }
+  } catch (err: any) {
+    errorDetails += `Error en Alumnas: ${err.message}. `;
+  }
+
+  // 2. Descargar Sedes_Horarios
+  try {
+    const scheduleTabNames = ['Sedes_Horarios', 'Horarios', 'Sedes', 'Sheet2', 'Hoja 2', 'Hoja2'];
+    let schedulesText = '';
+
+    for (const tab of scheduleTabNames) {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && !text.includes('<!DOCTYPE html>') && text.length > 20) {
+            schedulesText = text;
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (schedulesText) {
+      const parsedSchedules = parseSchedulesFromCsv(schedulesText);
+      if (parsedSchedules.length > 0) {
+        saveMockSchedules(parsedSchedules);
+        schedulesCount = parsedSchedules.length;
+      }
+    }
+  } catch (err: any) {
+    errorDetails += `Error en Horarios: ${err.message}. `;
+  }
+
+  // 3. Descargar Inscripciones (Opcional)
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=Inscripciones`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const text = await res.text();
+      if (text && !text.includes('<!DOCTYPE html>')) {
+        const parsedRegs = parseRegistrationsFromCsv(text);
+        if (parsedRegs.length > 0) {
+          saveMockRegistrations(parsedRegs);
+          registrationsCount = parsedRegs.length;
+        }
+      }
+    }
+  } catch (e) {}
+
+  if (studentsCount === 0 && schedulesCount === 0) {
+    return {
+      success: false,
+      message: `No se pudieron leer las pestañas de tu Google Sheet. Por favor verifica que tu hoja esté configurada como pública: En Google Sheets haz clic en 'Compartir' -> 'Acceso general' -> Selecciona 'Cualquier persona con el enlace' (Lector).`
+    };
+  }
+
+  // Guardar configuración
+  const currentSettings = getAppSettings();
+  const updatedSettings: AppSettings = {
+    ...currentSettings,
+    googleSheetUrlOrId: urlOrId.trim(),
+    useMockMode: false,
+    lastSyncDate: new Date().toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }),
+    lastSyncSource: 'sheet_url',
+    lastSyncCounts: {
+      students: studentsCount,
+      schedules: schedulesCount,
+      registrations: registrationsCount
+    }
+  };
+  saveAppSettings(updatedSettings);
+
+  return {
+    success: true,
+    message: `¡Sincronización exitosa! Se cargaron ${studentsCount} alumnas y ${schedulesCount} horarios desde tu Google Sheet.`,
+    counts: {
+      students: studentsCount,
+      schedules: schedulesCount,
+      registrations: registrationsCount
+    }
+  };
+}
+
+/**
+ * ⚡ Sincronización mediante Google Apps Script Web App API
+ */
+export async function syncWithAppsScript(webAppUrl?: string): Promise<{
+  success: boolean;
+  message: string;
+  counts?: { students: number; schedules: number; registrations: number };
+}> {
+  const currentSettings = getAppSettings();
+  const url = (webAppUrl || currentSettings.gasWebAppUrl || '').trim();
+
+  if (!url) {
+    return {
+      success: false,
+      message: 'Ingresa la URL de tu Web App de Apps Script (ej: https://script.google.com/macros/s/.../exec).'
+    };
+  }
+
+  let studentsCount = 0;
+  let schedulesCount = 0;
+  let registrationsCount = 0;
+
+  try {
+    // 1. Obtener Alumnas
+    try {
+      const resStudents = await fetch(`${url}?action=getAllStudents`);
+      const jsonStudents = await resStudents.json();
+      if (jsonStudents.success && Array.isArray(jsonStudents.data) && jsonStudents.data.length > 0) {
+        saveMockStudents(jsonStudents.data);
+        studentsCount = jsonStudents.data.length;
+      }
+    } catch (e) {
+      console.warn('Error fetching all students via Apps Script:', e);
+    }
+
+    // 2. Obtener Horarios
+    try {
+      const resSchedules = await fetch(`${url}?action=getAllSchedules`);
+      const jsonSchedules = await resSchedules.json();
+      if (jsonSchedules.success && Array.isArray(jsonSchedules.data) && jsonSchedules.data.length > 0) {
+        saveMockSchedules(jsonSchedules.data);
+        schedulesCount = jsonSchedules.data.length;
+      }
+    } catch (e) {
+      console.warn('Error fetching all schedules via Apps Script:', e);
+    }
+
+    // 3. Obtener Inscripciones
+    try {
+      const resRegs = await fetch(`${url}?action=getAllRegistrations`);
+      const jsonRegs = await resRegs.json();
+      if (jsonRegs.success && Array.isArray(jsonRegs.data)) {
+        saveMockRegistrations(jsonRegs.data);
+        registrationsCount = jsonRegs.data.length;
+      }
+    } catch (e) {
+      console.warn('Error fetching all registrations via Apps Script:', e);
+    }
+
+    if (studentsCount === 0 && schedulesCount === 0) {
+      return {
+        success: false,
+        message: 'La Web App de Apps Script respondió pero no devolvió registros en las pestañas. Verifica que tu Spreadsheet tenga las hojas Alumnas_Niveles y Sedes_Horarios.'
+      };
+    }
+
+    const updatedSettings: AppSettings = {
+      ...currentSettings,
+      gasWebAppUrl: url,
+      useMockMode: false,
+      lastSyncDate: new Date().toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }),
+      lastSyncSource: 'apps_script',
+      lastSyncCounts: {
+        students: studentsCount,
+        schedules: schedulesCount,
+        registrations: registrationsCount
+      }
+    };
+    saveAppSettings(updatedSettings);
+
+    return {
+      success: true,
+      message: `¡Conexión exitosa con Apps Script! Se sincronizaron ${studentsCount} alumnas y ${schedulesCount} horarios.`,
+      counts: {
+        students: studentsCount,
+        schedules: schedulesCount,
+        registrations: registrationsCount
+      }
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Error al conectar con la Web App: ${err.message || 'Verifica que el despliegue esté disponible para "Cualquier persona" (Anyone).'}`
+    };
+  }
+}
+

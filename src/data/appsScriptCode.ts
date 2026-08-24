@@ -57,6 +57,12 @@ function doGet(e) {
       const nivel = e.parameter.nivel ? e.parameter.nivel.toString().trim() : "";
       result = obtenerHorariosPorNivel(sheet, nivel);
     }
+    else if (action === "getAllStudents" || action === "getStudents") {
+      result = obtenerTodasLasAlumnas(sheet);
+    }
+    else if (action === "getAllRegistrations" || action === "getRegistrations") {
+      result = obtenerTodasLasInscripciones(sheet);
+    }
     else if (action === "ping") {
       result = { success: true, message: "Apps Script API activa correctamente" };
     }
@@ -222,6 +228,78 @@ function buscarAlumnaPorID(sheet, idSearch) {
   return { 
     success: false, 
     message: "No encontramos una alumna registrada con la identificación o teléfono ingresado. Verifique el número o comuníquese con secretaría." 
+  };
+}
+
+/**
+ * 👥 Helper: Obtener TODAS las alumnas registradas en la pestaña 'Alumnas_Niveles'
+ */
+function obtenerTodasLasAlumnas(sheet) {
+  const alumnosSheet = sheet.getSheetByName("Alumnas_Niveles");
+  if (!alumnosSheet) {
+    return { success: false, message: "No se encontró la pestaña 'Alumnas_Niveles' en la hoja." };
+  }
+  const data = alumnosSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [], message: "No hay registros en la pestaña 'Alumnas_Niveles'." };
+  }
+
+  const list = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0] && !row[4]) continue; // Fila vacía
+    list.push({
+      ID_Cliente: row[0] ? row[0].toString().trim() : "",
+      Nombre_Representante: row[1] ? row[1].toString().trim() : "",
+      Telefono_WhatsApp: row[2] ? row[2].toString().trim() : "",
+      Email: row[3] ? row[3].toString().trim() : "",
+      Nombre_Alumna: row[4] ? row[4].toString().trim() : "",
+      Nivel_Asignado: row[5] ? row[5].toString().trim() : "Principiante",
+      Estado: row[6] ? row[6].toString().trim() : "Activo"
+    });
+  }
+
+  return {
+    success: true,
+    data: list,
+    message: "Se recuperaron " + list.length + " alumnas exitosamente."
+  };
+}
+
+/**
+ * 📋 Helper: Obtener TODAS las inscripciones registradas en la pestaña 'Inscripciones'
+ */
+function obtenerTodasLasInscripciones(sheet) {
+  const inscripcionesSheet = sheet.getSheetByName("Inscripciones");
+  if (!inscripcionesSheet) {
+    return { success: false, message: "No se encontró la pestaña 'Inscripciones' en la hoja." };
+  }
+  const data = inscripcionesSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { success: true, data: [], message: "No hay inscripciones registradas." };
+  }
+
+  const list = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0] && !row[2]) continue;
+    list.push({
+      ID_Registro: row[0] ? row[0].toString().trim() : "",
+      Fecha_Registro: row[1] ? Utilities.formatDate(new Date(row[1]), "America/Guayaquil", "yyyy-MM-dd HH:mm:ss") : "",
+      ID_Cliente: row[2] ? row[2].toString().trim() : "",
+      Nombre_Alumna: row[3] ? row[3].toString().trim() : "",
+      Sede: row[4] ? row[4].toString().trim() : "",
+      Horario_Seleccionado: row[5] ? row[5].toString().trim() : "",
+      URL_Comprobante_Drive: row[6] ? row[6].toString().trim() : "Sin comprobante",
+      Estado_Inscripcion: row[7] ? row[7].toString().trim() : "Pendiente",
+      Notificado_Confirmacion: row[8] ? row[8].toString().trim() : "NO"
+    });
+  }
+
+  return {
+    success: true,
+    data: list,
+    message: "Se recuperaron " + list.length + " inscripciones exitosamente."
   };
 }
 

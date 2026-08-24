@@ -8,9 +8,12 @@ import {
   saveMockRegistrations,
   resetMockDataToDefault,
   saveScheduleApi,
-  deleteScheduleApi
+  deleteScheduleApi,
+  getAppSettings,
+  syncWithGoogleSheetUrl,
+  syncWithAppsScript
 } from '../services/api';
-import { AlumnaNivel, SedeHorario, Inscripcion } from '../types';
+import { AlumnaNivel, SedeHorario, Inscripcion, AppSettings } from '../types';
 import { 
   Database, 
   RefreshCw, 
@@ -19,17 +22,24 @@ import {
   XCircle, 
   Plus, 
   ExternalLink, 
-  Search,
-  Users,
-  Calendar,
-  Sparkles,
-  MailCheck,
-  Trash2,
-  X,
-  FileSpreadsheet,
-  HelpCircle,
-  Sparkle
+  Search, 
+  Users, 
+  Calendar, 
+  Sparkles, 
+  MailCheck, 
+  Trash2, 
+  X, 
+  FileSpreadsheet, 
+  HelpCircle, 
+  Sparkle,
+  Link2,
+  CheckCircle2,
+  AlertTriangle,
+  Code2,
+  Layers,
+  Settings2
 } from 'lucide-react';
+import { SyncModal } from './SyncModal';
 
 export const SheetInspector: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inscripciones' | 'alumnas' | 'horarios'>('inscripciones');
@@ -38,6 +48,9 @@ export const SheetInspector: React.FC = () => {
   const [registrations, setRegistrations] = useState<Inscripcion[]>(getMockRegistrations());
   const [searchTerm, setSearchTerm] = useState('');
   const [notificationBanner, setNotificationBanner] = useState<string | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [isQuickSyncing, setIsQuickSyncing] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(getAppSettings());
 
   // Modals for adding new student & schedule
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -67,6 +80,48 @@ export const SheetInspector: React.FC = () => {
     setStudents(getMockStudents());
     setSchedules(getMockSchedules());
     setRegistrations(getMockRegistrations());
+    setAppSettings(getAppSettings());
+  };
+
+  const handleQuickSync = async () => {
+    const current = getAppSettings();
+    if (current.googleSheetUrlOrId) {
+      setIsQuickSyncing(true);
+      try {
+        const res = await syncWithGoogleSheetUrl(current.googleSheetUrlOrId);
+        if (res.success) {
+          refreshLocalState();
+          showBanner(res.message);
+        } else {
+          showBanner(res.message);
+          setShowSyncModal(true);
+        }
+      } catch (err: any) {
+        showBanner(`Error: ${err.message}`);
+        setShowSyncModal(true);
+      } finally {
+        setIsQuickSyncing(false);
+      }
+    } else if (current.gasWebAppUrl) {
+      setIsQuickSyncing(true);
+      try {
+        const res = await syncWithAppsScript(current.gasWebAppUrl);
+        if (res.success) {
+          refreshLocalState();
+          showBanner(res.message);
+        } else {
+          showBanner(res.message);
+          setShowSyncModal(true);
+        }
+      } catch (err: any) {
+        showBanner(`Error: ${err.message}`);
+        setShowSyncModal(true);
+      } finally {
+        setIsQuickSyncing(false);
+      }
+    } else {
+      setShowSyncModal(true);
+    }
   };
 
   const handleReset = () => {
@@ -208,30 +263,87 @@ export const SheetInspector: React.FC = () => {
           </span>
           <h2 className="text-2xl font-bold tracking-tight">Alumnas, Horarios e Inscripciones</h2>
           <p className="text-purple-200 text-xs sm:text-sm mt-1 max-w-2xl">
-            Gestiona la información de <strong>Alquimia Danza Aérea</strong>. Puedes añadir alumnas y horarios aquí directamente o gestionarlos desde tu hoja de cálculo Google Sheets.
+            Gestiona la información de <strong>Alquimia Danza Aérea</strong>. Sincroniza en tiempo real tus alumnas y horarios desde Google Sheets o añade registros aquí.
           </p>
         </div>
 
-        <button
-          onClick={handleReset}
-          className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Restablecer Ejemplos</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleQuickSync}
+            disabled={isQuickSyncing}
+            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all shadow-md shadow-purple-950/40 cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isQuickSyncing ? 'animate-spin' : ''}`} />
+            <span>{isQuickSyncing ? 'Sincronizando...' : 'Sincronizar con Sheets'}</span>
+          </button>
+
+          <button
+            onClick={handleReset}
+            className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shrink-0"
+            title="Reiniciar a datos de ejemplo locales"
+          >
+            <span>Restablecer</span>
+          </button>
+        </div>
       </div>
 
-      {/* Synchronized Guide Card */}
-      <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 p-4 rounded-2xl border border-indigo-100/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
-        <div className="flex items-start space-x-2.5 text-indigo-950">
-          <FileSpreadsheet className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-slate-900">¿Dónde y cómo ingresar la información?</p>
-            <p className="text-slate-600 mt-0.5">
-              • <strong>En Google Sheets:</strong> Si conectas tu Google Sheet mediante el Web App URL de Apps Script (en la pestaña <em>Backend & GAS</em>), los datos se leen y escriben en tiempo real en tus 3 pestañas: <code className="bg-purple-100/80 text-purple-900 px-1 py-0.5 rounded font-mono">Alumnas_Niveles</code>, <code className="bg-indigo-100/80 text-indigo-900 px-1 py-0.5 rounded font-mono">Sedes_Horarios</code> e <code className="bg-pink-100/80 text-pink-900 px-1 py-0.5 rounded font-mono">Inscripciones</code>.
-              <br />
-              • <strong>En esta aplicación:</strong> Puedes usar los botones morados <strong>"+ Nueva Alumna"</strong> y <strong>"+ Nuevo Horario"</strong> para registrar a tus alumnas y horarios de forma inmediata.
-            </p>
+      {/* Google Sheets Sync Connection Banner */}
+      <div className={`p-5 rounded-2xl border transition-all ${
+        appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl
+          ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950 shadow-xs'
+          : 'bg-amber-50/80 border-amber-200 text-amber-950 shadow-xs'
+      }`}>
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3">
+            <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+              appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            }`}>
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                <span className="font-bold text-sm text-slate-900">
+                  {appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl
+                    ? 'Conexión Activa con Google Sheets'
+                    : 'Modo Local / Datos de Ejemplo'}
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                  appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl
+                    ? 'bg-emerald-200 text-emerald-800'
+                    : 'bg-amber-200 text-amber-800'
+                }`}>
+                  {appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl ? 'Sincronizado' : 'Sin vincular'}
+                </span>
+              </div>
+              
+              <p className="text-xs text-slate-600 mt-1">
+                {appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl ? (
+                  <>
+                    Tus datos están conectados.{' '}
+                    {appSettings.lastSyncDate && (
+                      <span className="font-medium text-slate-700">
+                        Última actualización: <strong>{appSettings.lastSyncDate}</strong>.
+                      </span>
+                    )}
+                    {' '}({students.length} alumnas y {schedules.length} horarios cargados).
+                  </>
+                ) : (
+                  <>
+                    ¿Ya actualizaste tus alumnas y horarios en Google Sheets? Haz clic en <strong>"Traer Datos de Google Sheets"</strong> para cargarlos aquí al instante.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 w-full md:w-auto justify-end">
+            <button
+              onClick={() => setShowSyncModal(true)}
+              className="w-full md:w-auto bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
+              <span>{appSettings.googleSheetUrlOrId || appSettings.gasWebAppUrl ? 'Actualizar / Cambiar Hoja' : 'Traer Datos de Google Sheets'}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -766,6 +878,13 @@ export const SheetInspector: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Sync with Google Sheets Modal */}
+      <SyncModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+        onSyncComplete={refreshLocalState}
+      />
 
     </div>
   );

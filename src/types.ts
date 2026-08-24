@@ -36,6 +36,14 @@ export interface Inscripcion {
 export interface AppSettings {
   gasWebAppUrl: string;
   useMockMode: boolean;
+  googleSheetUrlOrId?: string;
+  lastSyncDate?: string;
+  lastSyncSource?: 'sheet_url' | 'apps_script' | 'manual';
+  lastSyncCounts?: {
+    students: number;
+    schedules: number;
+    registrations: number;
+  };
 }
 
 export interface ApiSearchResponse {
