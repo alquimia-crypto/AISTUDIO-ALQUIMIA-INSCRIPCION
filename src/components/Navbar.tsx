@@ -48,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-bold text-slate-900 text-base sm:text-lg tracking-tight">Academia Danza & Artes</span>
+                <span className="font-bold text-slate-900 text-base sm:text-lg tracking-tight">Alquimia Danza Aérea</span>
                 {isAdmin && (
                   <span className="bg-purple-100 text-purple-700 text-[11px] px-2 py-0.5 rounded-full font-semibold border border-purple-200 flex items-center space-x-1">
                     <ShieldCheck className="w-3 h-3" />

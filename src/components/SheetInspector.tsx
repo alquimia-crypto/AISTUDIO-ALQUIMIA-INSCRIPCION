@@ -6,7 +6,9 @@ import {
   saveMockSchedules, 
   getMockRegistrations, 
   saveMockRegistrations,
-  resetMockDataToDefault 
+  resetMockDataToDefault,
+  saveScheduleApi,
+  deleteScheduleApi
 } from '../services/api';
 import { AlumnaNivel, SedeHorario, Inscripcion } from '../types';
 import { 
@@ -21,7 +23,12 @@ import {
   Users,
   Calendar,
   Sparkles,
-  MailCheck
+  MailCheck,
+  Trash2,
+  X,
+  FileSpreadsheet,
+  HelpCircle,
+  Sparkle
 } from 'lucide-react';
 
 export const SheetInspector: React.FC = () => {
@@ -32,6 +39,30 @@ export const SheetInspector: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [notificationBanner, setNotificationBanner] = useState<string | null>(null);
 
+  // Modals for adding new student & schedule
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [newStudent, setNewStudent] = useState<AlumnaNivel>({
+    ID_Cliente: '',
+    Nombre_Representante: '',
+    Telefono_WhatsApp: '',
+    Email: '',
+    Nombre_Alumna: '',
+    Nivel_Asignado: 'Principiante',
+    Estado: 'Activo'
+  });
+
+  const [showAddScheduleModal, setShowAddScheduleModal] = useState(false);
+  const [newSchedule, setNewSchedule] = useState<SedeHorario>({
+    ID_Horario: '',
+    Sede: 'Sede Principal (Norte)',
+    Nivel_Requerido: 'Principiante',
+    Dia: 'Lunes y Miércoles',
+    Horario: '16:00 - 17:30',
+    Cupo_Maximo: 10,
+    Cupos_Ocupados: 0,
+    Estado_Horario: 'Disponible'
+  });
+
   const refreshLocalState = () => {
     setStudents(getMockStudents());
     setSchedules(getMockSchedules());
@@ -39,10 +70,10 @@ export const SheetInspector: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (confirm('¿Deseas reiniciar los datos de prueba a su estado original?')) {
+    if (confirm('¿Deseas reiniciar los datos a los valores de ejemplo iniciales?')) {
       resetMockDataToDefault();
       refreshLocalState();
-      showBanner('Datos del simulador reiniciados a valores iniciales.');
+      showBanner('Datos reiniciados a los valores de ejemplo.');
     }
   };
 
@@ -51,9 +82,74 @@ export const SheetInspector: React.FC = () => {
     setTimeout(() => setNotificationBanner(null), 4000);
   };
 
+  // Add new student
+  const handleSaveStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStudent.ID_Cliente || !newStudent.Nombre_Alumna) {
+      alert('Por favor ingresa al menos la Cédula/ID y el Nombre de la Alumna.');
+      return;
+    }
+
+    const updated = [newStudent, ...students];
+    setStudents(updated);
+    saveMockStudents(updated);
+    setShowAddStudentModal(false);
+    showBanner(`¡Alumna "${newStudent.Nombre_Alumna}" guardada exitosamente! Ya puede buscarse en el formulario.`);
+    setNewStudent({
+      ID_Cliente: '',
+      Nombre_Representante: '',
+      Telefono_WhatsApp: '',
+      Email: '',
+      Nombre_Alumna: '',
+      Nivel_Asignado: 'Principiante',
+      Estado: 'Activo'
+    });
+  };
+
+  const handleDeleteStudent = (id: string) => {
+    if (confirm(`¿Eliminar a la alumna con ID ${id}?`)) {
+      const updated = students.filter(s => s.ID_Cliente !== id);
+      setStudents(updated);
+      saveMockStudents(updated);
+      showBanner(`Alumna eliminada.`);
+    }
+  };
+
+  // Add new schedule
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = newSchedule.ID_Horario.trim() || `HOR-00${schedules.length + 1}`;
+    const scheduleToSave = {
+      ...newSchedule,
+      ID_Horario: id
+    };
+
+    const res = await saveScheduleApi(scheduleToSave);
+    setSchedules(getMockSchedules());
+    setShowAddScheduleModal(false);
+    showBanner(res.message || `¡Horario "${scheduleToSave.Dia} ${scheduleToSave.Horario}" guardado exitosamente!`);
+    setNewSchedule({
+      ID_Horario: '',
+      Sede: 'Sede Principal (Norte)',
+      Nivel_Requerido: 'Principiante',
+      Dia: 'Lunes y Miércoles',
+      Horario: '16:00 - 17:30',
+      Cupo_Maximo: 10,
+      Cupos_Ocupados: 0,
+      Estado_Horario: 'Disponible'
+    });
+  };
+
+  const handleDeleteSchedule = async (id: string) => {
+    if (confirm(`¿Eliminar el horario ${id}?`)) {
+      const res = await deleteScheduleApi(id);
+      setSchedules(getMockSchedules());
+      showBanner(res.message || `Horario ${id} eliminado.`);
+    }
+  };
+
   /**
    * Simulates the Apps Script trigger `enviarConfirmacionFinal()`
-   * When admin updates status to 'Confirmado', Notificado_Confirmacion updates to 'SI' and fires email
    */
   const handleUpdateStatus = (idRegistro: string, newStatus: 'Pendiente' | 'Confirmado' | 'Rechazado') => {
     const updated = registrations.map(reg => {
@@ -72,7 +168,7 @@ export const SheetInspector: React.FC = () => {
     saveMockRegistrations(updated);
 
     if (newStatus === 'Confirmado') {
-      showBanner(`Trigger simulado: Estado cambiado a 'Confirmado'. Se ha enviado el correo de confirmación final y marcado Notificado_Confirmacion='SI'.`);
+      showBanner(`Trigger: Estado cambiado a 'Confirmado'. Se ha enviado el correo de confirmación final y marcado Notificado_Confirmacion='SI'.`);
     } else {
       showBanner(`Estado de registro ${idRegistro} actualizado a ${newStatus}.`);
     }
@@ -85,6 +181,21 @@ export const SheetInspector: React.FC = () => {
     r.ID_Registro.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredStudents = students.filter(s =>
+    !searchTerm ||
+    s.Nombre_Alumna.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.Nombre_Representante.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.ID_Cliente.includes(searchTerm) ||
+    s.Nivel_Asignado.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredSchedules = schedules.filter(sch =>
+    !searchTerm ||
+    sch.Sede.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    sch.Nivel_Requerido.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    sch.Dia.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       
@@ -93,23 +204,41 @@ export const SheetInspector: React.FC = () => {
         <div>
           <span className="inline-flex items-center space-x-1.5 bg-purple-500/30 text-purple-200 text-xs px-3 py-1 rounded-full font-medium mb-2 border border-purple-500/30">
             <Database className="w-3.5 h-3.5" />
-            <span>Simulador de Google Sheets en Vivo</span>
+            <span>Gestión de Base de Datos & Google Sheets</span>
           </span>
-          <h2 className="text-2xl font-bold tracking-tight">Inspector de Pestañas y Trigger de Correo</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Alumnas, Horarios e Inscripciones</h2>
+          <p className="text-purple-200 text-xs sm:text-sm mt-1 max-w-2xl">
+            Gestiona la información de <strong>Alquimia Danza Aérea</strong>. Puedes añadir alumnas y horarios aquí directamente o gestionarlos desde tu hoja de cálculo Google Sheets.
+          </p>
         </div>
 
         <button
           onClick={handleReset}
-          className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer self-start sm:self-auto"
+          className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
         >
           <RefreshCw className="w-4 h-4" />
-          <span>Reiniciar Datos de Prueba</span>
+          <span>Restablecer Ejemplos</span>
         </button>
+      </div>
+
+      {/* Synchronized Guide Card */}
+      <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 p-4 rounded-2xl border border-indigo-100/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-start space-x-2.5 text-indigo-950">
+          <FileSpreadsheet className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-slate-900">¿Dónde y cómo ingresar la información?</p>
+            <p className="text-slate-600 mt-0.5">
+              • <strong>En Google Sheets:</strong> Si conectas tu Google Sheet mediante el Web App URL de Apps Script (en la pestaña <em>Backend & GAS</em>), los datos se leen y escriben en tiempo real en tus 3 pestañas: <code className="bg-purple-100/80 text-purple-900 px-1 py-0.5 rounded font-mono">Alumnas_Niveles</code>, <code className="bg-indigo-100/80 text-indigo-900 px-1 py-0.5 rounded font-mono">Sedes_Horarios</code> e <code className="bg-pink-100/80 text-pink-900 px-1 py-0.5 rounded font-mono">Inscripciones</code>.
+              <br />
+              • <strong>En esta aplicación:</strong> Puedes usar los botones morados <strong>"+ Nueva Alumna"</strong> y <strong>"+ Nuevo Horario"</strong> para registrar a tus alumnas y horarios de forma inmediata.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Simulated Email Trigger Banner */}
       {notificationBanner && (
-        <div className="bg-emerald-900 text-emerald-100 p-4 rounded-2xl border border-emerald-700 shadow-lg text-xs font-medium flex items-center space-x-2 animate-fade-in">
+        <div className="bg-emerald-900 text-emerald-100 p-4 rounded-2xl border border-emerald-700 shadow-lg text-xs font-medium flex items-center space-x-2 animate-fadeIn">
           <MailCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           <span>{notificationBanner}</span>
         </div>
@@ -118,7 +247,7 @@ export const SheetInspector: React.FC = () => {
       {/* Tabs */}
       <div className="flex border-b border-slate-200 space-x-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('inscripciones')}
+          onClick={() => { setActiveTab('inscripciones'); setSearchTerm(''); }}
           className={`pb-3 text-sm font-bold flex items-center space-x-2 border-b-2 px-3 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'inscripciones' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
@@ -128,7 +257,7 @@ export const SheetInspector: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('alumnas')}
+          onClick={() => { setActiveTab('alumnas'); setSearchTerm(''); }}
           className={`pb-3 text-sm font-bold flex items-center space-x-2 border-b-2 px-3 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'alumnas' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
@@ -138,7 +267,7 @@ export const SheetInspector: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('horarios')}
+          onClick={() => { setActiveTab('horarios'); setSearchTerm(''); }}
           className={`pb-3 text-sm font-bold flex items-center space-x-2 border-b-2 px-3 transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'horarios' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
@@ -148,10 +277,10 @@ export const SheetInspector: React.FC = () => {
         </button>
       </div>
 
-      {/* TAB 1: INSCRIPCIONES (Includes state toggling to test trigger enviarConfirmacionFinal) */}
+      {/* TAB 1: INSCRIPCIONES */}
       {activeTab === 'inscripciones' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative max-w-xs w-full">
               <input
                 type="text"
@@ -164,7 +293,7 @@ export const SheetInspector: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-500">
-              💡 Cambia el estado a <strong>"Confirmado"</strong> para simular el trigger de correo automático.
+              💡 Cambia el estado a <strong>"Confirmado"</strong> para simular el envío del correo de confirmación final.
             </p>
           </div>
 
@@ -180,7 +309,7 @@ export const SheetInspector: React.FC = () => {
                     <th className="p-3 border-b">Sede</th>
                     <th className="p-3 border-b">Horario_Seleccionado</th>
                     <th className="p-3 border-b">Estado_Inscripcion</th>
-                    <th className="p-3 border-b">Notificado</th>
+                    <th className="p-3 border-b">Notificado_Confirmacion</th>
                     <th className="p-3 border-b">Comprobante</th>
                   </tr>
                 </thead>
@@ -188,11 +317,11 @@ export const SheetInspector: React.FC = () => {
                   {filteredRegistrations.map((row) => (
                     <tr key={row.ID_Registro} className="hover:bg-slate-50">
                       <td className="p-3 font-mono font-bold text-slate-900">{row.ID_Registro}</td>
-                      <td className="p-3 text-slate-600">{row.Fecha_Registro}</td>
-                      <td className="p-3 font-mono text-slate-700">{row.ID_Cliente}</td>
-                      <td className="p-3 font-bold text-slate-900">{row.Nombre_Alumna}</td>
-                      <td className="p-3 text-slate-700">{row.Sede}</td>
-                      <td className="p-3 text-slate-700">{row.Horario_Seleccionado}</td>
+                      <td className="p-3 text-slate-500 whitespace-nowrap">{row.Fecha_Registro}</td>
+                      <td className="p-3 font-mono">{row.ID_Cliente}</td>
+                      <td className="p-3 font-bold text-purple-900">{row.Nombre_Alumna}</td>
+                      <td className="p-3">{row.Sede}</td>
+                      <td className="p-3">{row.Horario_Seleccionado}</td>
                       <td className="p-3">
                         <select
                           value={row.Estado_Inscripcion}
@@ -242,84 +371,398 @@ export const SheetInspector: React.FC = () => {
 
       {/* TAB 2: ALUMNAS_NIVELES */}
       {activeTab === 'alumnas' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
-                <tr>
-                  <th className="p-3 border-b">ID_Cliente</th>
-                  <th className="p-3 border-b">Nombre_Representante</th>
-                  <th className="p-3 border-b">Telefono_WhatsApp</th>
-                  <th className="p-3 border-b">Email</th>
-                  <th className="p-3 border-b">Nombre_Alumna</th>
-                  <th className="p-3 border-b">Nivel_Asignado</th>
-                  <th className="p-3 border-b">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {students.map((st) => (
-                  <tr key={st.ID_Cliente} className="hover:bg-slate-50">
-                    <td className="p-3 font-mono font-bold text-slate-900">{st.ID_Cliente}</td>
-                    <td className="p-3 font-medium text-slate-800">{st.Nombre_Representante}</td>
-                    <td className="p-3 text-slate-600">{st.Telefono_WhatsApp}</td>
-                    <td className="p-3 text-slate-600">{st.Email}</td>
-                    <td className="p-3 font-bold text-purple-900">{st.Nombre_Alumna}</td>
-                    <td className="p-3 font-semibold text-slate-800">{st.Nivel_Asignado}</td>
-                    <td className="p-3 font-bold">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] ${
-                        st.Estado === 'Activo' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {st.Estado}
-                      </span>
-                    </td>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative max-w-xs w-full">
+              <input
+                type="text"
+                placeholder="Buscar alumna, representante o nivel..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:outline-none"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            </div>
+
+            <button
+              onClick={() => setShowAddStudentModal(true)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Nueva Alumna</span>
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
+                  <tr>
+                    <th className="p-3 border-b">ID_Cliente (Cédula/Código)</th>
+                    <th className="p-3 border-b">Nombre_Representante</th>
+                    <th className="p-3 border-b">Telefono_WhatsApp</th>
+                    <th className="p-3 border-b">Email</th>
+                    <th className="p-3 border-b">Nombre_Alumna</th>
+                    <th className="p-3 border-b">Nivel_Asignado</th>
+                    <th className="p-3 border-b">Estado</th>
+                    <th className="p-3 border-b text-center">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredStudents.map((st) => (
+                    <tr key={st.ID_Cliente} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-slate-900">{st.ID_Cliente}</td>
+                      <td className="p-3 font-medium text-slate-800">{st.Nombre_Representante}</td>
+                      <td className="p-3 text-slate-600">{st.Telefono_WhatsApp}</td>
+                      <td className="p-3 text-slate-600">{st.Email}</td>
+                      <td className="p-3 font-bold text-purple-900">{st.Nombre_Alumna}</td>
+                      <td className="p-3 font-semibold text-slate-800">{st.Nivel_Asignado}</td>
+                      <td className="p-3 font-bold">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] ${
+                          st.Estado === 'Activo' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {st.Estado}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => handleDeleteStudent(st.ID_Cliente)}
+                          className="text-slate-400 hover:text-red-600 p-1.5 rounded-md transition-colors cursor-pointer"
+                          title="Eliminar alumna"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* TAB 3: SEDES_HORARIOS */}
       {activeTab === 'horarios' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
-                <tr>
-                  <th className="p-3 border-b">ID_Horario</th>
-                  <th className="p-3 border-b">Sede</th>
-                  <th className="p-3 border-b">Nivel_Requerido</th>
-                  <th className="p-3 border-b">Dia</th>
-                  <th className="p-3 border-b">Horario</th>
-                  <th className="p-3 border-b">Cupo_Maximo</th>
-                  <th className="p-3 border-b">Cupos_Ocupados</th>
-                  <th className="p-3 border-b">Estado_Horario</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {schedules.map((sch) => (
-                  <tr key={sch.ID_Horario} className="hover:bg-slate-50">
-                    <td className="p-3 font-mono font-bold text-slate-900">{sch.ID_Horario}</td>
-                    <td className="p-3 font-medium text-slate-800">{sch.Sede}</td>
-                    <td className="p-3 font-semibold text-purple-900">{sch.Nivel_Requerido}</td>
-                    <td className="p-3 text-slate-700">{sch.Dia}</td>
-                    <td className="p-3 text-slate-700">{sch.Horario}</td>
-                    <td className="p-3 font-mono font-bold text-slate-900">{sch.Cupo_Maximo}</td>
-                    <td className="p-3 font-mono font-bold text-purple-700">{sch.Cupos_Ocupados}</td>
-                    <td className="p-3 font-bold">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] ${
-                        sch.Cupos_Ocupados >= sch.Cupo_Maximo || sch.Estado_Horario === 'Lleno' 
-                          ? 'bg-red-100 text-red-800' 
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {sch.Cupos_Ocupados >= sch.Cupo_Maximo ? 'Lleno' : 'Disponible'}
-                      </span>
-                    </td>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative max-w-xs w-full">
+              <input
+                type="text"
+                placeholder="Buscar por sede o nivel..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:outline-none"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            </div>
+
+            <button
+              onClick={() => setShowAddScheduleModal(true)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Nuevo Horario</span>
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
+                  <tr>
+                    <th className="p-3 border-b">ID_Horario</th>
+                    <th className="p-3 border-b">Sede</th>
+                    <th className="p-3 border-b">Nivel_Requerido</th>
+                    <th className="p-3 border-b">Dia</th>
+                    <th className="p-3 border-b">Horario</th>
+                    <th className="p-3 border-b">Cupo_Maximo</th>
+                    <th className="p-3 border-b">Cupos_Ocupados</th>
+                    <th className="p-3 border-b">Estado_Horario</th>
+                    <th className="p-3 border-b text-center">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSchedules.map((sch) => (
+                    <tr key={sch.ID_Horario} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-slate-900">{sch.ID_Horario}</td>
+                      <td className="p-3 font-medium text-slate-800">{sch.Sede}</td>
+                      <td className="p-3 font-semibold text-purple-900">{sch.Nivel_Requerido}</td>
+                      <td className="p-3 text-slate-700">{sch.Dia}</td>
+                      <td className="p-3 text-slate-700">{sch.Horario}</td>
+                      <td className="p-3 font-mono font-bold text-slate-900">{sch.Cupo_Maximo}</td>
+                      <td className="p-3 font-mono font-bold text-purple-700">{sch.Cupos_Ocupados}</td>
+                      <td className="p-3 font-bold">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] ${
+                          sch.Cupos_Ocupados >= sch.Cupo_Maximo || sch.Estado_Horario === 'Lleno' 
+                            ? 'bg-red-100 text-red-800' 
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {sch.Cupos_Ocupados >= sch.Cupo_Maximo ? 'Lleno' : 'Disponible'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => handleDeleteSchedule(sch.ID_Horario)}
+                          className="text-slate-400 hover:text-red-600 p-1.5 rounded-md transition-colors cursor-pointer"
+                          title="Eliminar horario"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD STUDENT */}
+      {showAddStudentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative">
+            <button
+              onClick={() => setShowAddStudentModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-5">
+              <span className="text-xs font-semibold bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full">
+                Tabla Alumnas_Niveles
+              </span>
+              <h3 className="text-xl font-bold text-slate-900 mt-2">Registrar Nueva Alumna</h3>
+              <p className="text-xs text-slate-500">
+                La alumna podrá identificarse en el Paso 1 con su Cédula/ID o Teléfono WhatsApp.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveStudent} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Cédula / ID Cliente *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: 1723456789"
+                    value={newStudent.ID_Cliente}
+                    onChange={(e) => setNewStudent({ ...newStudent, ID_Cliente: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre de la Alumna *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Valentina Morales"
+                    value={newStudent.Nombre_Alumna}
+                    onChange={(e) => setNewStudent({ ...newStudent, Nombre_Alumna: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre Representante</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Gabriela Castro"
+                    value={newStudent.Nombre_Representante}
+                    onChange={(e) => setNewStudent({ ...newStudent, Nombre_Representante: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Teléfono WhatsApp</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: +593998765432"
+                    value={newStudent.Telefono_WhatsApp}
+                    onChange={(e) => setNewStudent({ ...newStudent, Telefono_WhatsApp: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Correo Electrónico</label>
+                <input
+                  type="email"
+                  placeholder="Ej: representante@gmail.com"
+                  value={newStudent.Email}
+                  onChange={(e) => setNewStudent({ ...newStudent, Email: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nivel Asignado</label>
+                  <select
+                    value={newStudent.Nivel_Asignado}
+                    onChange={(e) => setNewStudent({ ...newStudent, Nivel_Asignado: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  >
+                    <option value="Principiante">Principiante</option>
+                    <option value="Intermedio">Intermedio</option>
+                    <option value="Avanzado">Avanzado</option>
+                    <option value="Infantil A">Infantil A</option>
+                    <option value="Danza Aérea">Danza Aérea</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
+                  <select
+                    value={newStudent.Estado}
+                    onChange={(e) => setNewStudent({ ...newStudent, Estado: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  >
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddStudentModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-200"
+                >
+                  Guardar Alumna
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD SCHEDULE */}
+      {showAddScheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative">
+            <button
+              onClick={() => setShowAddScheduleModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-5">
+              <span className="text-xs font-semibold bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-full">
+                Tabla Sedes_Horarios
+              </span>
+              <h3 className="text-xl font-bold text-slate-900 mt-2">Crear Nuevo Horario</h3>
+              <p className="text-xs text-slate-500">
+                Se mostrará únicamente a las alumnas cuyo nivel coincida con este horario.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSchedule} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Sede *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Sede Principal (Norte)"
+                    value={newSchedule.Sede}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, Sede: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nivel Requerido *</label>
+                  <select
+                    value={newSchedule.Nivel_Requerido}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, Nivel_Requerido: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  >
+                    <option value="Principiante">Principiante</option>
+                    <option value="Intermedio">Intermedio</option>
+                    <option value="Avanzado">Avanzado</option>
+                    <option value="Infantil A">Infantil A</option>
+                    <option value="Danza Aérea">Danza Aérea</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Días *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Lunes y Miércoles"
+                    value={newSchedule.Dia}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, Dia: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Horario *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: 16:30 - 18:00"
+                    value={newSchedule.Horario}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, Horario: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Cupo Máximo</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newSchedule.Cupo_Maximo}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, Cupo_Maximo: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Cupos Ocupados Iniciales</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newSchedule.Cupos_Ocupados}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, Cupos_Ocupados: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddScheduleModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-200"
+                >
+                  Guardar Horario
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

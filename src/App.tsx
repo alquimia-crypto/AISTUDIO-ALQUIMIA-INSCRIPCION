@@ -341,7 +341,7 @@ export default function App() {
           <div className="flex items-center space-x-2">
             <GraduationCap className="w-4 h-4 text-indigo-600" />
             <span className="font-semibold text-slate-800">Plataforma de Inscripción & Reserva de Cupos</span>
-            <span className="hidden md:inline">・ Academia Danza & Artes</span>
+            <span className="hidden md:inline">・ Alquimia Danza Aérea</span>
           </div>
 
           <div className="flex items-center space-x-4">

@@ -325,3 +325,192 @@ export async function getRegistrationsByStudentId(idCliente: string): Promise<In
   const all = getMockRegistrations();
   return all.filter((r) => r.ID_Cliente.replace(/\D/g, '') === cleanId);
 }
+
+/**
+ * 🗓️ Guardar o Editar un Horario (Conecta con Google Sheets / Apps Script)
+ */
+export async function saveScheduleApi(schedule: SedeHorario): Promise<{ success: boolean; message: string; ID_Horario?: string }> {
+  const settings = getAppSettings();
+  
+  // 1. Siempre actualizar el estado local para reactividad inmediata
+  const schedules = getMockSchedules();
+  const index = schedules.findIndex((s) => s.ID_Horario === schedule.ID_Horario);
+  let updatedList: SedeHorario[];
+  
+  if (index >= 0) {
+    updatedList = [...schedules];
+    updatedList[index] = schedule;
+  } else {
+    updatedList = [schedule, ...schedules];
+  }
+  saveMockSchedules(updatedList);
+
+  // 2. Si Google Sheets está conectado en vivo, enviar la petición POST
+  if (!settings.useMockMode && settings.gasWebAppUrl) {
+    try {
+      const payload = {
+        action: 'saveSchedule',
+        ID_Horario: schedule.ID_Horario,
+        Sede: schedule.Sede,
+        Nivel_Requerido: schedule.Nivel_Requerido,
+        Dia: schedule.Dia,
+        Horario: schedule.Horario,
+        Cupo_Maximo: schedule.Cupo_Maximo,
+        Cupos_Ocupados: schedule.Cupos_Ocupados,
+        Estado_Horario: schedule.Cupos_Ocupados >= schedule.Cupo_Maximo ? 'Lleno' : schedule.Estado_Horario
+      };
+
+      const res = await fetch(settings.gasWebAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      return {
+        success: json.success ?? true,
+        message: json.message || 'Horario guardado y sincronizado con Google Sheets.',
+        ID_Horario: schedule.ID_Horario
+      };
+    } catch (error) {
+      console.warn('Error sincronizando horario con Apps Script en vivo:', error);
+      return {
+        success: true,
+        message: 'Guardado localmente. (Error de red al sincronizar con Google Sheets)',
+        ID_Horario: schedule.ID_Horario
+      };
+    }
+  }
+
+  return {
+    success: true,
+    message: index >= 0 
+      ? `Horario ${schedule.ID_Horario} actualizado correctamente.` 
+      : `Nuevo horario ${schedule.ID_Horario} creado correctamente.`,
+    ID_Horario: schedule.ID_Horario
+  };
+}
+
+/**
+ * 🗑️ Eliminar un Horario (Conecta con Google Sheets / Apps Script)
+ */
+export async function deleteScheduleApi(idHorario: string): Promise<{ success: boolean; message: string }> {
+  const settings = getAppSettings();
+
+  // 1. Actualizar estado local
+  const schedules = getMockSchedules();
+  const updatedList = schedules.filter((s) => s.ID_Horario !== idHorario);
+  saveMockSchedules(updatedList);
+
+  // 2. Si Google Sheets está conectado en vivo, enviar acción deleteSchedule
+  if (!settings.useMockMode && settings.gasWebAppUrl) {
+    try {
+      const payload = {
+        action: 'deleteSchedule',
+        idHorario: idHorario
+      };
+
+      const res = await fetch(settings.gasWebAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      return {
+        success: json.success ?? true,
+        message: json.message || `Horario ${idHorario} eliminado en Google Sheets.`
+      };
+    } catch (error) {
+      console.warn('Error eliminando horario en Apps Script:', error);
+      return {
+        success: true,
+        message: `Eliminado localmente. (Error de red con Google Sheets)`
+      };
+    }
+  }
+
+  return {
+    success: true,
+    message: `Horario ${idHorario} eliminado correctamente.`
+  };
+}
+
+/**
+ * 🔄 Sincronizar Masivamente Todos los Horarios con Google Sheets
+ */
+export async function bulkSyncSchedulesApi(schedulesList: SedeHorario[]): Promise<{ success: boolean; message: string }> {
+  const settings = getAppSettings();
+  saveMockSchedules(schedulesList);
+
+  if (!settings.useMockMode && settings.gasWebAppUrl) {
+    try {
+      const payload = {
+        action: 'syncAllSchedules',
+        schedules: schedulesList
+      };
+
+      const res = await fetch(settings.gasWebAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      return {
+        success: json.success ?? true,
+        message: json.message || `${schedulesList.length} horarios sincronizados con Google Sheets.`
+      };
+    } catch (error) {
+      console.warn('Error sincronizando masivamente con Google Sheets:', error);
+      return {
+        success: false,
+        message: 'No se pudo conectar con Google Apps Script. Se guardó copia local.'
+      };
+    }
+  }
+
+  return {
+    success: true,
+    message: `${schedulesList.length} horarios guardados y listos.`
+  };
+}
+
+/**
+ * 📥 Traer Horarios en Vivo desde Google Sheets
+ */
+export async function fetchLiveSchedulesFromSheetApi(): Promise<{ success: boolean; data?: SedeHorario[]; message?: string }> {
+  const settings = getAppSettings();
+
+  if (!settings.useMockMode && settings.gasWebAppUrl) {
+    try {
+      const url = `${settings.gasWebAppUrl}?action=getAllSchedules`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        saveMockSchedules(json.data);
+        return {
+          success: true,
+          data: json.data,
+          message: `Se descargaron ${json.data.length} horarios en vivo desde tu Google Sheet.`
+        };
+      }
+    } catch (error) {
+      console.warn('Error al consultar horarios en vivo:', error);
+      return {
+        success: false,
+        message: 'No se pudo conectar con Google Sheets. Mostrando datos locales.'
+      };
+    }
+  }
+
+  const local = getMockSchedules();
+  return {
+    success: true,
+    data: local,
+    message: `Cargados ${local.length} horarios (Modo Local / Sin URL configurada).`
+  };
+}

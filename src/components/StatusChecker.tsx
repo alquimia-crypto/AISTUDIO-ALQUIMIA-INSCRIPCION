@@ -66,7 +66,7 @@ export const StatusChecker: React.FC = () => {
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Ej: 1726354490 o 0991234567"
+              placeholder="Ingresa tu Cédula / Identificación o WhatsApp"
               className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white text-base transition-all"
             />
           </div>
@@ -79,18 +79,6 @@ export const StatusChecker: React.FC = () => {
             <span>Consultar Registros</span>
           </button>
         </form>
-
-        <div className="flex items-center space-x-2 text-xs text-slate-500 pt-1">
-          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-          <span>Ejemplos para consultar:</span>
-          <button onClick={() => { setSearchInput('1726354490'); handleSearch('1726354490'); }} className="text-purple-700 underline hover:text-purple-900 font-medium cursor-pointer">
-            1726354490 (Sofia Torres)
-          </button>
-          <span>•</span>
-          <button onClick={() => { setSearchInput('0991234567'); handleSearch('0991234567'); }} className="text-purple-700 underline hover:text-purple-900 font-medium cursor-pointer">
-            0991234567 (Camila Mendoza)
-          </button>
-        </div>
       </div>
 
       {/* Results */}
@@ -156,19 +144,14 @@ export const StatusChecker: React.FC = () => {
 
                   {reg.URL_Comprobante_Drive && reg.URL_Comprobante_Drive !== 'Sin comprobante' && (
                     <div className="pt-2 flex items-center justify-between text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      <span className="text-slate-600 flex items-center space-x-1">
+                      <span className="text-slate-600 flex items-center space-x-1.5 font-medium">
                         <FileText className="w-4 h-4 text-purple-600" />
-                        <span>Comprobante adjunto en Google Drive</span>
+                        <span>Comprobante de Pago de la Inscripción:</span>
                       </span>
-                      <a
-                        href={reg.URL_Comprobante_Drive}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-purple-700 hover:text-purple-900 font-semibold underline flex items-center space-x-1"
-                      >
-                        <span>Ver en Drive</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg font-semibold flex items-center space-x-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Registrado</span>
+                      </span>
                     </div>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 {
-  "name": "Inscripciones y Reserva de Cupos (Google Sheets Backend)",
-  "description": "Plataforma web SPA para inscripción y reserva de cupos conectada a Google Sheets, Google Drive y Apps Script como backend.",
+  "name": "Alquimia Danza Aérea - Sistema de Inscripciones",
+  "description": "Plataforma web para inscripción y reserva de cupos de Alquimia Danza Aérea (ALQUIMIACORP S.A.S.) conectada a Google Sheets y Google Drive.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

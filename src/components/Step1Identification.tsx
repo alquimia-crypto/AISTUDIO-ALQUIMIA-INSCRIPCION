@@ -51,11 +51,6 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
     }
   };
 
-  const handleQuickFill = (val: string) => {
-    setSearchInput(val);
-    handleSearch(val);
-  };
-
   return (
     <div className="space-y-6">
       
@@ -89,7 +84,7 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Ej: 1726354490 o 0998765432"
+              placeholder="Ingresa el número de cédula o WhatsApp registrado"
               className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white text-base transition-all"
             />
           </div>
@@ -112,37 +107,6 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
             )}
           </button>
         </form>
-
-        {/* Quick Demo Test Fillers */}
-        <div className="pt-2">
-          <div className="flex items-center space-x-1.5 text-xs text-slate-500 mb-2 font-medium">
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>IDs de prueba rápida (Datos de ejemplo en Google Sheets):</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleQuickFill('1726354490')}
-              className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 transition-colors font-medium flex items-center space-x-1 cursor-pointer"
-            >
-              <span>Sofia Torres (Principiante)</span>
-              <span className="text-purple-400 font-mono text-[10px]">1726354490</span>
-            </button>
-            <button
-              onClick={() => handleQuickFill('0991234567')}
-              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors font-medium flex items-center space-x-1 cursor-pointer"
-            >
-              <span>Camila Mendoza (Intermedio)</span>
-              <span className="text-indigo-400 font-mono text-[10px]">0991234567</span>
-            </button>
-            <button
-              onClick={() => handleQuickFill('0987654321')}
-              className="text-xs bg-pink-50 hover:bg-pink-100 text-pink-700 px-3 py-1.5 rounded-lg border border-pink-200 transition-colors font-medium flex items-center space-x-1 cursor-pointer"
-            >
-              <span>Isabella Benítez (Avanzado)</span>
-              <span className="text-pink-400 font-mono text-[10px]">0987654321</span>
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Error / Not Found Message */}
@@ -161,13 +125,13 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
               <span>¿Es tu primera vez o necesitas actualizar tus datos?</span>
             </div>
             <a
-              href="https://wa.me/593998765432?text=Hola,%20necesito%20ayuda%20para%20registrar%20a%20mi%20alumna%20en%20el%20sistema"
+              href="https://wa.me/593983944951?text=Hola,%20necesito%20ayuda%20para%20verificar%20la%20ficha%20de%20mi%20alumna%20en%20el%20sistema"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center space-x-1.5 text-xs font-semibold bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-xs"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              <span>Contactar Secretaría vía WhatsApp</span>
+              <span>Contactar Secretaría (WhatsApp 0983944951)</span>
             </a>
           </div>
         </div>

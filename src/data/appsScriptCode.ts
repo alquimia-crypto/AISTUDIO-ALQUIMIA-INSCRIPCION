@@ -36,8 +36,8 @@ export const APPS_SCRIPT_CODE = `/**
 // ⚙️ CONFIGURACIÓN GLOBAL (Reemplaza con tus propios IDs)
 const SPREADSHEET_ID = "REEMPLAZAR_CON_TU_SPREADSHEET_ID";
 const DRIVE_FOLDER_ID = "REEMPLAZAR_CON_TU_DRIVE_FOLDER_ID";
-const NOMBRE_ACADEMIA = "Academia de Artes & Danza";
-const EMAIL_CONTACTO = "alquimiadanzaaerea@gmail.com";
+const NOMBRE_ACADEMIA = "Alquimia Danza Aérea";
+const EMAIL_CONTACTO = "alquimiada0@gmail.com";
 
 /**
  * 📥 ENDPOINT GET: Consultas públicas de Alumnas y Horarios
@@ -53,7 +53,7 @@ function doGet(e) {
       const idSearch = e.parameter.id ? e.parameter.id.toString().trim() : "";
       result = buscarAlumnaPorID(sheet, idSearch);
     } 
-    else if (action === "getSchedules") {
+    else if (action === "getSchedules" || action === "getAllSchedules") {
       const nivel = e.parameter.nivel ? e.parameter.nivel.toString().trim() : "";
       result = obtenerHorariosPorNivel(sheet, nivel);
     }
@@ -64,14 +64,14 @@ function doGet(e) {
     result = { success: false, message: "Error interno en Apps Script: " + error.toString() };
   }
   
-  // Manejo estricto de CORS para permitir consultas desde Netlify u otros dominios
+  // Manejo estricto de CORS para permitir consultas desde cualquier origen
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
- * 📤 ENDPOINT POST: Registro de Inscripción y Carga de Comprobante
+ * 📤 ENDPOINT POST: Registro de Inscripción, Guardado de Comprobante y Gestión de Horarios
  */
 function doPost(e) {
   let result = { success: false, message: "Ocurrió un error al procesar la solicitud" };
@@ -84,7 +84,26 @@ function doPost(e) {
     } else {
       contents = e.parameter;
     }
+
+    const action = contents.action;
+
+    // 🗓️ GESTIÓN DE HORARIOS DIRECTO EN GOOGLE SHEETS
+    if (action === "saveSchedule" || action === "editSchedule") {
+      result = guardarOActualizarHorarioEnSheet(sheet, contents);
+      return responseJSON(result);
+    }
+
+    if (action === "deleteSchedule") {
+      result = eliminarHorarioDeSheet(sheet, contents.idHorario || contents.ID_Horario);
+      return responseJSON(result);
+    }
+
+    if (action === "syncAllSchedules") {
+      result = sincronizarTodosLosHorarios(sheet, contents.schedules || []);
+      return responseJSON(result);
+    }
     
+    // 📝 REGISTRO DE INSCRIPCIÓN Y SUBIDA DE COMPROBANTE
     const idCliente = contents.idCliente || contents.ID_Cliente;
     const nombreAlumna = contents.nombreAlumna || contents.Nombre_Alumna;
     const sede = contents.sede || contents.Sede;
@@ -153,7 +172,7 @@ function doPost(e) {
   } catch (error) {
     result = {
       success: false,
-      message: "Error al procesar inscripción: " + error.toString()
+      message: "Error al procesar solicitud: " + error.toString()
     };
   }
   
@@ -279,6 +298,125 @@ function actualizarCupoHorario(sheet, idHorario, textoHorario, sede) {
       break;
     }
   }
+}
+
+/**
+ * 💾 Helper: Guardar o Editar un Horario en la pestaña 'Sedes_Horarios'
+ */
+function guardarOActualizarHorarioEnSheet(sheet, payload) {
+  const horariosSheet = sheet.getSheetByName("Sedes_Horarios");
+  const data = horariosSheet.getDataRange().getValues();
+  
+  const idHorario = payload.idHorario || payload.ID_Horario || ("HOR-" + Utilities.formatDate(new Date(), "America/Guayaquil", "mmss"));
+  const sede = payload.sede || payload.Sede || "Sede Principal";
+  const nivel = payload.nivelRequerido || payload.Nivel_Requerido || "Principiante";
+  const dia = payload.dia || payload.Dia || "Lunes y Miércoles";
+  const horario = payload.horario || payload.Horario || "16:00 - 17:30";
+  const cupoMax = Number(payload.cupoMaximo || payload.Cupo_Maximo) || 10;
+  const cuposOcupados = Number(payload.cuposOcupados || payload.Cupos_Ocupados) || 0;
+  const estado = cuposOcupados >= cupoMax ? "Lleno" : (payload.estadoHorario || payload.Estado_Horario || "Disponible");
+
+  let foundIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][0].toString().trim() === idHorario.toString().trim()) {
+      foundIndex = i + 1; // 1-based row index in sheet
+      break;
+    }
+  }
+
+  if (foundIndex > 0) {
+    // Editar fila existente
+    horariosSheet.getRange(foundIndex, 1, 1, 8).setValues([[
+      idHorario,
+      sede,
+      nivel,
+      dia,
+      horario,
+      cupoMax,
+      cuposOcupados,
+      estado
+    ]]);
+    return {
+      success: true,
+      message: "Horario " + idHorario + " actualizado exitosamente en Google Sheets.",
+      ID_Horario: idHorario
+    };
+  } else {
+    // Agregar nueva fila
+    horariosSheet.appendRow([
+      idHorario,
+      sede,
+      nivel,
+      dia,
+      horario,
+      cupoMax,
+      cuposOcupados,
+      estado
+    ]);
+    return {
+      success: true,
+      message: "Nuevo horario " + idHorario + " registrado exitosamente en Google Sheets.",
+      ID_Horario: idHorario
+    };
+  }
+}
+
+/**
+ * 🗑️ Helper: Eliminar Horario de la pestaña 'Sedes_Horarios'
+ */
+function eliminarHorarioDeSheet(sheet, idHorario) {
+  if (!idHorario) return { success: false, message: "ID_Horario requerido para eliminar." };
+  const horariosSheet = sheet.getSheetByName("Sedes_Horarios");
+  const data = horariosSheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][0].toString().trim() === idHorario.toString().trim()) {
+      horariosSheet.deleteRow(i + 1);
+      return {
+        success: true,
+        message: "Horario " + idHorario + " eliminado de Google Sheets."
+      };
+    }
+  }
+  return { success: false, message: "No se encontró el horario " + idHorario + " en Google Sheets." };
+}
+
+/**
+ * 🔄 Helper: Sincronizar Masivamente Todos los Horarios
+ */
+function sincronizarTodosLosHorarios(sheet, schedulesList) {
+  if (!Array.isArray(schedulesList) || schedulesList.length === 0) {
+    return { success: false, message: "La lista de horarios enviada está vacía." };
+  }
+  const horariosSheet = sheet.getSheetByName("Sedes_Horarios");
+  
+  // Limpiar datos previos manteniendo encabezados
+  const lastRow = horariosSheet.getLastRow();
+  if (lastRow > 1) {
+    horariosSheet.getRange(2, 1, lastRow - 1, 8).clearContent();
+  }
+  
+  const rows = schedulesList.map(function(item) {
+    var maxC = Number(item.Cupo_Maximo) || 10;
+    var occC = Number(item.Cupos_Ocupados) || 0;
+    var est = occC >= maxC ? "Lleno" : (item.Estado_Horario || "Disponible");
+    return [
+      item.ID_Horario,
+      item.Sede,
+      item.Nivel_Requerido,
+      item.Dia,
+      item.Horario,
+      maxC,
+      occC,
+      est
+    ];
+  });
+  
+  horariosSheet.getRange(2, 1, rows.length, 8).setValues(rows);
+  return {
+    success: true,
+    message: "Se sincronizaron " + rows.length + " horarios en Google Sheets."
+  };
 }
 
 /**
