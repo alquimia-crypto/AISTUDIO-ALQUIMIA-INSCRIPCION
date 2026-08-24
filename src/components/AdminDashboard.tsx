@@ -33,8 +33,10 @@ import {
   PieChart as PieChartIcon,
   Layers,
   Award,
-  AlertTriangle
+  AlertTriangle,
+  KeyRound
 } from 'lucide-react';
+import { ChangePinModal } from './ChangePinModal';
 
 export const AdminDashboard: React.FC = () => {
   const [schedules, setSchedules] = useState<SedeHorario[]>([]);
@@ -42,6 +44,7 @@ export const AdminDashboard: React.FC = () => {
   const [students, setStudents] = useState<AlumnaNivel[]>([]);
   const [selectedSedeFilter, setSelectedSedeFilter] = useState<string>('TODAS');
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [showChangePinModal, setShowChangePinModal] = useState<boolean>(false);
 
   const loadData = () => {
     setSchedules(getMockSchedules());
@@ -65,7 +68,7 @@ export const AdminDashboard: React.FC = () => {
   const alumnasActivas = students.filter(s => s.Estado === 'Activo').length;
 
   // Sedes list for filter & aggregation
-  const sedesList = Array.from(new Set(schedules.map(s => s.Sede)));
+  const sedesList: string[] = Array.from(new Set(schedules.map(s => s.Sede)));
 
   // Data for Chart 1: Sede Bar Chart (Ocupados vs Libres)
   const sedeChartData = sedesList.map(sedeName => {
@@ -141,13 +144,24 @@ export const AdminDashboard: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => setRefreshKey(prev => prev + 1)}
-            className="bg-white/15 hover:bg-white/25 text-white text-xs px-4 py-2.5 rounded-2xl border border-white/20 transition-all flex items-center space-x-2 cursor-pointer backdrop-blur-xs self-start sm:self-auto shadow-sm"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Actualizar Métricas</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => setShowChangePinModal(true)}
+              className="bg-white/15 hover:bg-white/25 text-white text-xs px-3.5 py-2.5 rounded-2xl border border-white/20 transition-all flex items-center space-x-1.5 cursor-pointer backdrop-blur-xs shadow-sm font-semibold"
+              title="Cambiar PIN de Administrador"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-purple-200" />
+              <span>Cambiar PIN</span>
+            </button>
+
+            <button
+              onClick={() => setRefreshKey(prev => prev + 1)}
+              className="bg-white/15 hover:bg-white/25 text-white text-xs px-3.5 py-2.5 rounded-2xl border border-white/20 transition-all flex items-center space-x-1.5 cursor-pointer backdrop-blur-xs shadow-sm"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Actualizar Métricas</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -468,6 +482,11 @@ export const AdminDashboard: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <ChangePinModal
+        isOpen={showChangePinModal}
+        onClose={() => setShowChangePinModal(false)}
+      />
 
     </div>
   );

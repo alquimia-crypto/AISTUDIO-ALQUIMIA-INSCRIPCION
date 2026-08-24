@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { APPS_SCRIPT_CODE, GOOGLE_SHEETS_STRUCTURE } from '../data/appsScriptCode';
 import { AppSettings } from '../types';
-import { saveAppSettings } from '../services/api';
+import { saveAppSettings, getAdminPin, setAdminPin } from '../services/api';
 import { 
   Code2, 
   Copy, 
@@ -16,7 +16,10 @@ import {
   Sparkles,
   Server,
   Layers,
-  HelpCircle
+  HelpCircle,
+  KeyRound,
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
 
 interface GasScriptModalProps {
@@ -28,7 +31,7 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
   settings,
   onSettingsUpdated
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'code' | 'sheets' | 'gas_setup' | 'netlify'>('code');
+  const [activeSubTab, setActiveSubTab] = useState<'code' | 'sheets' | 'gas_setup' | 'netlify' | 'security'>('code');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedTabHeaders, setCopiedTabHeaders] = useState<string | null>(null);
   
@@ -38,10 +41,29 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
   const [testingPing, setTestingPing] = useState(false);
   const [pingResult, setPingResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Admin PIN management state
+  const [adminPinInput, setAdminPinInput] = useState(getAdminPin());
+  const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const handleCopyCode = () => {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2500);
+  };
+
+  const handleUpdateAdminPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminPinInput || adminPinInput.trim().length < 4) {
+      setPinMessage({ type: 'error', text: 'El PIN debe tener al menos 4 caracteres.' });
+      return;
+    }
+    const success = setAdminPin(adminPinInput.trim());
+    if (success) {
+      setPinMessage({ type: 'success', text: '¡PIN de administrador actualizado exitosamente!' });
+      setTimeout(() => setPinMessage(null), 3500);
+    } else {
+      setPinMessage({ type: 'error', text: 'No se pudo guardar el PIN.' });
+    }
   };
 
   const handleCopyCsvHeaders = (tabName: string, headers: string[]) => {
@@ -224,6 +246,16 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
         >
           <Globe className="w-4 h-4" />
           <span>4. Despliegue Netlify</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('security')}
+          className={`pb-3 text-sm font-semibold flex items-center space-x-2 border-b-2 px-3 transition-colors cursor-pointer ${
+            activeSubTab === 'security' ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <KeyRound className="w-4 h-4" />
+          <span>5. Seguridad & Clave Admin</span>
         </button>
       </div>
 
@@ -447,6 +479,75 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
               </p>
             </li>
           </ol>
+        </div>
+      )}
+
+      {/* SUB-TAB 5: Security & Admin PIN Settings */}
+      {activeSubTab === 'security' && (
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+          <div>
+            <span className="inline-flex items-center space-x-1.5 bg-purple-100 text-purple-800 text-xs px-3 py-1 rounded-full font-semibold mb-2">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Privacidad & Restricción de Acceso</span>
+            </span>
+            <h3 className="text-xl font-bold text-slate-900">Seguridad y PIN de Administrador</h3>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              Las alumnas y visitantes solo ven el formulario de inscripción y la consulta de estado. Las opciones internas (Dashboard, Sheets y Backend) están protegidas por este PIN.
+            </p>
+          </div>
+
+          <form onSubmit={handleUpdateAdminPin} className="max-w-lg space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                PIN de Acceso al Panel de Control
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={adminPinInput}
+                  onChange={(e) => setAdminPinInput(e.target.value)}
+                  placeholder="Ej: 1234 o tu contraseña personal"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-sm focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                Mínimo 4 dígitos o letras. Cámbialo cuando lo necesites.
+              </p>
+            </div>
+
+            {pinMessage && (
+              <div className={`p-3 rounded-xl text-xs flex items-center space-x-2 ${
+                pinMessage.type === 'success' 
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                  : 'bg-red-50 text-red-800 border border-red-200'
+              }`}>
+                {pinMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                )}
+                <span>{pinMessage.text}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Guardar Nuevo PIN</span>
+            </button>
+          </form>
+
+          <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+            <p className="font-bold">💡 Consejo para el despliegue en Netlify:</p>
+            <p>
+              Cuando compartes el enlace de Netlify a tus alumnas, ellas verán una interfaz limpia y profesional únicamente con la inscripción y la verificación. Tú podrás ingresar en cualquier momento haciendo clic en el enlace <strong>"Acceso Admin"</strong> con este PIN.
+            </p>
+          </div>
         </div>
       )}
 

@@ -13,6 +13,41 @@ const SETTINGS_KEY = 'app_gas_settings_v1';
 const MOCK_STUDENTS_KEY = 'app_mock_students_v1';
 const MOCK_SCHEDULES_KEY = 'app_mock_schedules_v1';
 const MOCK_REGISTRATIONS_KEY = 'app_mock_registrations_v1';
+const ADMIN_PIN_KEY = 'app_admin_pin_v1';
+const ADMIN_SESSION_KEY = 'app_admin_session_v1';
+
+const DEFAULT_ADMIN_PIN = '1234';
+
+// Admin Authentication & Session helpers
+export function getAdminPin(): string {
+  const saved = localStorage.getItem(ADMIN_PIN_KEY);
+  return saved || DEFAULT_ADMIN_PIN;
+}
+
+export function setAdminPin(newPin: string): boolean {
+  if (!newPin || newPin.trim().length < 4) {
+    return false;
+  }
+  localStorage.setItem(ADMIN_PIN_KEY, newPin.trim());
+  return true;
+}
+
+export function checkAdminPin(enteredPin: string): boolean {
+  const currentPin = getAdminPin();
+  return enteredPin.trim() === currentPin;
+}
+
+export function isAdminSessionActive(): boolean {
+  return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
+}
+
+export function setAdminSession(active: boolean): void {
+  if (active) {
+    sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+  } else {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  }
+}
 
 // Default settings
 export function getAppSettings(): AppSettings {
