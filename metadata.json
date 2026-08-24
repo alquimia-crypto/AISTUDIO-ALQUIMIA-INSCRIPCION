@@ -1,0 +1,6 @@
+{
+  "name": "Inscripciones y Reserva de Cupos (Google Sheets Backend)",
+  "description": "Plataforma web SPA para inscripción y reserva de cupos conectada a Google Sheets, Google Drive y Apps Script como backend.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
