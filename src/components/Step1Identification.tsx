@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AlumnaNivel } from '../types';
-import { searchStudentApi, saveStudentApi, getMockStudents, normalizeEmail } from '../services/api';
+import { searchStudentApi, saveStudentApi, normalizeEmail } from '../services/api';
 import { 
   Search, 
   User, 
   Phone, 
   Mail, 
-  Sparkles, 
   CheckCircle, 
   AlertTriangle, 
-  HelpCircle,
   ArrowRight,
   Loader2,
   ShieldCheck,
@@ -50,7 +48,6 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [foundStudent, setFoundStudent] = useState<AlumnaNivel | null>(null);
-  const [registeredStudents, setRegisteredStudents] = useState<AlumnaNivel[]>([]);
   const [showQuickRegister, setShowQuickRegister] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerSuccessMsg, setRegisterSuccessMsg] = useState<string | null>(null);
@@ -64,10 +61,6 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
     ID_Cliente: '',
     Nivel_Asignado: 'Básico' as 'Básico' | 'Intermedio/Avanzado' | 'Avanzado'
   });
-
-  useEffect(() => {
-    setRegisteredStudents(getMockStudents());
-  }, []);
 
   const handleSearch = async (queryToSearch?: string) => {
     const term = queryToSearch !== undefined ? queryToSearch : searchInput;
@@ -128,7 +121,6 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
 
       const res = await saveStudentApi(studentToCreate);
       if (res.success && res.data) {
-        setRegisteredStudents(getMockStudents());
         setShowQuickRegister(false);
         setErrorMsg(null);
         setSearchInput(res.data.Email);
@@ -219,27 +211,6 @@ export const Step1Identification: React.FC<Step1Props> = ({ onStudentVerified })
             )}
           </button>
         </form>
-
-        {/* Sugerencias rápidas para pruebas locales */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span className="font-semibold text-slate-600 flex items-center space-x-1">
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>Cuentas de prueba rápidas:</span>
-          </span>
-          {registeredStudents.slice(0, 5).map((st) => (
-            <button
-              key={st.ID_Cliente || st.Email}
-              type="button"
-              onClick={() => {
-                setSearchInput(st.Email);
-                handleSearch(st.Email);
-              }}
-              className="bg-purple-50 hover:bg-purple-100 text-purple-800 px-2.5 py-1 rounded-lg font-medium border border-purple-200 transition-colors cursor-pointer"
-            >
-              {st.Email} ({st.Nivel_Asignado})
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Success Notification if just registered */}
