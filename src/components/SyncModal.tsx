@@ -42,8 +42,10 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose, onSyncCom
   // Tab 1: Google Sheet URL / ID
   const [sheetUrlInput, setSheetUrlInput] = useState(settings.googleSheetUrlOrId || '');
   
-  // Tab 2: Apps Script URL
+  // Tab 2: Apps Script URL and Security Credentials
   const [gasUrlInput, setGasUrlInput] = useState(settings.gasWebAppUrl || '');
+  const [apiKeyInput, setApiKeyInput] = useState(settings.apiKey || 'ALQUIMIA_SECRET_API_KEY_2025_SECURE');
+  const [adminTokenInput, setAdminTokenInput] = useState(settings.adminToken || 'ALQUIMIA_ADMIN_AUTH_TOKEN_778899');
   
   // Tab 3: Direct Paste
   const [pasteType, setPasteType] = useState<'alumnas' | 'horarios'>('alumnas');
@@ -90,8 +92,17 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose, onSyncCom
       return;
     }
 
+    // Guardar tokens de autenticación primero
+    const curSettings = getAppSettings();
+    saveAppSettings({
+      ...curSettings,
+      apiKey: apiKeyInput.trim(),
+      adminToken: adminTokenInput.trim(),
+      gasWebAppUrl: gasUrlInput.trim()
+    });
+
     setLoading(true);
-    setStatusMessage({ type: 'info', text: 'Conectando con la Web App de Google Apps Script...' });
+    setStatusMessage({ type: 'info', text: 'Conectando con la Web App de Google Apps Script con tokens de seguridad...' });
 
     try {
       const res = await syncWithAppsScript(gasUrlInput.trim());
@@ -341,13 +352,42 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose, onSyncCom
                 </div>
               </div>
 
+              {/* Credenciales de Seguridad de la API */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <span>API Key Secreto (Protección Endpoint)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="Clave API secreta"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <span>Token Administrador (Acciones Críticas)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={adminTokenInput}
+                    onChange={(e) => setAdminTokenInput(e.target.value)}
+                    placeholder="Token de administrador"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white font-mono"
+                  />
+                </div>
+              </div>
+
               <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 text-xs text-indigo-950 space-y-2">
                 <div className="font-bold flex items-center space-x-1.5 text-indigo-900">
                   <HelpCircle className="w-4 h-4 text-indigo-700" />
-                  <span>Para usar la API de Apps Script:</span>
+                  <span>Protección Backend Activa:</span>
                 </div>
                 <p className="text-slate-700">
-                  Pega el código de <code>Code.gs</code> en <em>Extensiones &gt; Apps Script</em> de tu hoja de cálculo, realiza un <strong>Nuevo Despliegue como Aplicación Web</strong> con acceso para <em>"Cualquier persona" (Anyone)</em>, y pega aquí la URL generada.
+                  Las solicitudes ahora están protegidas por autenticación con <strong>API Key</strong> y <strong>Token Admin</strong> para impedir que personas no autorizadas lean o modifiquen tu base de datos en Google Sheets.
                 </p>
               </div>
 

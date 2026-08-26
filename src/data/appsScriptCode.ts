@@ -33,25 +33,67 @@ export const APPS_SCRIPT_CODE = `/**
  * ==============================================================================
  */
 
-// ⚙️ CONFIGURACIÓN GLOBAL (Reemplaza con tus propios IDs)
+// ⚙️ CONFIGURACIÓN GLOBAL DE SEGURIDAD (Reemplaza con tus propios valores)
 const SPREADSHEET_ID = "REEMPLAZAR_CON_TU_SPREADSHEET_ID";
 const DRIVE_FOLDER_ID = "REEMPLAZAR_CON_TU_DRIVE_FOLDER_ID";
 const NOMBRE_ACADEMIA = "Alquimia Danza Aérea";
 const EMAIL_CONTACTO = "alquimiada0@gmail.com";
 
+// 🛡️ CLAVES DE SEGURIDAD (Cámbialas por tus propias contraseñas seguras)
+// API_KEY: Protege tu script contra accesos externos no autorizados desde cURL/Postman
+const API_KEY_SECRETO = "ALQUIMIA_SEC_KEY_2026";
+// ADMIN_MASTER_TOKEN: Valida en el servidor las acciones de administración (crear/borrar horarios, ver listas completas)
+const ADMIN_MASTER_PIN = "2583";
+
 /**
- * 📥 ENDPOINT GET: Consultas públicas de Alumnas y Horarios
+ * 🛡️ Helper: Validar autenticación de peticiones entrantes
+ */
+function validarAutenticacion(params, postData, requiereAdmin) {
+  const reqApiKey = (params && (params.apiKey || params.api_key || params.token)) || 
+                    (postData && (postData.apiKey || postData.api_key || postData.token)) || "";
+  
+  // Si API_KEY_SECRETO está configurado, verificar coincidencia (o permitir modo legacy si está vacío)
+  if (API_KEY_SECRETO && API_KEY_SECRETO !== "" && API_KEY_SECRETO !== "REEMPLAZAR_CON_TU_API_KEY") {
+    if (reqApiKey !== API_KEY_SECRETO) {
+      return { autorizado: false, motivo: "Acceso denegado: API Key no válida o ausente." };
+    }
+  }
+
+  // Si la acción requiere privilegios de administrador
+  if (requiereAdmin) {
+    const adminToken = (params && (params.adminToken || params.adminPin || params.pin)) || 
+                       (postData && (postData.adminToken || postData.adminPin || postData.pin)) || "";
+    if (adminToken !== ADMIN_MASTER_PIN) {
+      return { autorizado: false, motivo: "Acceso denegado: Credenciales de administrador no válidas." };
+    }
+  }
+
+  return { autorizado: true };
+}
+
+/**
+ * 📥 ENDPOINT GET: Consultas de Alumnas y Horarios con Validación de Seguridad
  */
 function doGet(e) {
   const action = e.parameter.action;
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   
+  // Validar si la acción es administrativa (ej: descargar todas las alumnas o inscripciones)
+  const esAccionAdmin = (action === "getAllStudents" || action === "getAllRegistrations" || action === "getWaitingList" || action === "getAllWaitingList");
+  const authCheck = validarAutenticacion(e.parameter, null, esAccionAdmin);
+  
+  if (!authCheck.autorizado) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, message: authCheck.motivo, error: "UNAUTHORIZED" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
   let result = { success: false, message: "Acción no válida" };
   
   try {
     if (action === "getStudent") {
-      const idSearch = e.parameter.id ? e.parameter.id.toString().trim() : "";
-      result = buscarAlumnaPorID(sheet, idSearch);
+      const searchParam = (e.parameter.query || e.parameter.email || e.parameter.id || "").toString().trim();
+      result = buscarAlumnaPorID(sheet, searchParam);
     } 
     else if (action === "getSchedules" || action === "getAllSchedules") {
       const nivel = e.parameter.nivel ? e.parameter.nivel.toString().trim() : "";
@@ -63,8 +105,11 @@ function doGet(e) {
     else if (action === "getAllRegistrations" || action === "getRegistrations") {
       result = obtenerTodasLasInscripciones(sheet);
     }
+    else if (action === "getWaitingList" || action === "getAllWaitingList") {
+      result = obtenerTodaListaEspera(sheet);
+    }
     else if (action === "ping") {
-      result = { success: true, message: "Apps Script API activa correctamente" };
+      result = { success: true, message: "Apps Script API activa y protegida correctamente." };
     }
   } catch (error) {
     result = { success: false, message: "Error interno en Apps Script: " + error.toString() };
@@ -93,6 +138,21 @@ function doPost(e) {
 
     const action = contents.action;
 
+    // Verificar si la acción es administrativa
+    const esAccionAdmin = (
+      action === "saveSchedule" || 
+      action === "editSchedule" || 
+      action === "deleteSchedule" || 
+      action === "syncAllSchedules" || 
+      action === "deleteStudent" ||
+      action === "updateWaitingListStatus"
+    );
+
+    const authCheck = validarAutenticacion(e.parameter, contents, esAccionAdmin);
+    if (!authCheck.autorizado) {
+      return responseJSON({ success: false, message: authCheck.motivo, error: "UNAUTHORIZED" });
+    }
+
     // 🗓️ GESTIÓN DE HORARIOS DIRECTO EN GOOGLE SHEETS
     if (action === "saveSchedule" || action === "editSchedule") {
       result = guardarOActualizarHorarioEnSheet(sheet, contents);
@@ -106,6 +166,23 @@ function doPost(e) {
 
     if (action === "syncAllSchedules") {
       result = sincronizarTodosLosHorarios(sheet, contents.schedules || []);
+      return responseJSON(result);
+    }
+
+    // 👥 GESTIÓN DE ALUMNAS DIRECTO EN GOOGLE SHEETS
+    if (action === "saveStudent" || action === "addStudent" || action === "editStudent") {
+      result = guardarOActualizarAlumnaEnSheet(sheet, contents.student || contents);
+      return responseJSON(result);
+    }
+
+    // 🛎️ GESTIÓN DE LISTA DE ESPERA
+    if (action === "addToWaitingList") {
+      result = registrarEnListaEspera(sheet, contents);
+      return responseJSON(result);
+    }
+
+    if (action === "updateWaitingListStatus") {
+      result = actualizarEstadoListaEspera(sheet, contents.idEspera || contents.ID_Espera, contents.nuevoEstado);
       return responseJSON(result);
     }
     
@@ -123,12 +200,16 @@ function doPost(e) {
       return responseJSON({ success: false, message: "Faltan datos obligatorios para completar la inscripción." });
     }
     
-    // 1. Guardar comprobante en Google Drive
+    // 1. Guardar comprobante en Google Drive (con validación estricta de seguridad)
     let driveFileUrl = "Sin comprobante";
     if (fileData) {
+      const allowedMimes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+      const cleanMime = allowedMimes.indexOf(mimeType) !== -1 ? mimeType : "application/pdf";
+      const cleanName = (fileName || ("Comprobante_" + idCliente + ".pdf")).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+
       const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
       const cleanBase64 = fileData.replace(/^data:.*?;base64,/, "");
-      const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), mimeType, fileName);
+      const blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), cleanMime, cleanName);
       const file = folder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       driveFileUrl = file.getUrl();
@@ -138,15 +219,23 @@ function doPost(e) {
     const fechaRegistro = Utilities.formatDate(new Date(), "America/Guayaquil", "yyyy-MM-dd HH:mm:ss");
     const idRegistro = "INS-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
     
+    // Helper para neutralizar inyección de fórmulas CSV (=,+,-,@)
+    function sanitizeForSheet(val) {
+      if (typeof val === "string" && /^[=+\\-@\\t\\r]/.test(val)) {
+        return "'" + val;
+      }
+      return val;
+    }
+
     // 3. Registrar fila en pestaña 'Inscripciones'
     const inscripcionesSheet = sheet.getSheetByName("Inscripciones");
     inscripcionesSheet.appendRow([
-      idRegistro,
-      fechaRegistro,
-      idCliente,
-      nombreAlumna,
-      sede,
-      horarioSeleccionado,
+      sanitizeForSheet(idRegistro),
+      sanitizeForSheet(fechaRegistro),
+      sanitizeForSheet(idCliente),
+      sanitizeForSheet(nombreAlumna),
+      sanitizeForSheet(sede),
+      sanitizeForSheet(horarioSeleccionado),
       driveFileUrl,
       "Pendiente", // Estado_Inscripcion
       "NO"        // Notificado_Confirmacion
@@ -186,39 +275,122 @@ function doPost(e) {
 }
 
 /**
- * 🔍 Helper: Buscar datos de la alumna por ID_Cliente o Teléfono
+ * 🔍 Helper: Normalizar correos en Apps Script eliminando espacios, saltos de línea y acentos
  */
-function buscarAlumnaPorID(sheet, idSearch) {
+function normalizarEmailGAS(str) {
+  if (!str) return "";
+  return str.toString().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u00A0\u1680\u180e\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff\s]/g, "")
+    .trim();
+}
+
+/**
+ * 🔍 Helper: Buscar datos de la alumna por Correo Electrónico (o Cédula / Teléfono / Nombre)
+ */
+function buscarAlumnaPorID(sheet, searchParam) {
   const alumnosSheet = sheet.getSheetByName("Alumnas_Niveles");
+  if (!alumnosSheet) return { success: false, message: "No se encontró la pestaña 'Alumnas_Niveles' en la hoja de cálculo." };
   const data = alumnosSheet.getDataRange().getValues();
-  if (data.length <= 1) return { success: false, message: "No hay registros cargados en el sistema." };
+  if (data.length <= 1) return { success: false, message: "No hay registros cargados en la pestaña 'Alumnas_Niveles'." };
   
-  // Limpiar búsqueda
-  const cleanSearch = idSearch.toString().replace(/\\D/g, "");
+  const rawSearch = (searchParam || "").toString().trim();
+  const cleanEmail = normalizarEmailGAS(rawSearch);
+  const cleanDigits = rawSearch.replace(/\D/g, "");
+  const cleanNameQuery = rawSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const idCliente = row[0] ? row[0].toString().replace(/\\D/g, "") : "";
-    const telefono = row[2] ? row[2].toString().replace(/\\D/g, "") : "";
-    const estado = row[6] ? row[6].toString().trim() : "Activo";
+  // Detección dinámica y semántica de encabezados de columnas (independiente del orden o idioma)
+  const headers = data[0].map(function(h) {
+    return (h || "").toString().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  });
+  
+  var colId = -1, colRep = -1, colTel = -1, colEmail = -1, colAlumna = -1, colNivel = -1, colEstado = -1;
+  
+  for (var h = 0; h < headers.length; h++) {
+    var hName = headers[h];
+    if (colEmail === -1 && (hName.indexOf("email") !== -1 || hName.indexOf("correo") !== -1 || hName.indexOf("mail") !== -1)) {
+      colEmail = h;
+    } else if (colAlumna === -1 && (hName.indexOf("alumn") !== -1 || hName.indexOf("estudiant") !== -1 || (hName.indexOf("nombre") !== -1 && hName.indexOf("rep") === -1 && hName.indexOf("tutor") === -1 && hName.indexOf("padre") === -1 && hName.indexOf("titular") === -1))) {
+      colAlumna = h;
+    } else if (colRep === -1 && (hName.indexOf("represent") !== -1 || hName.indexOf("tutor") !== -1 || hName.indexOf("padre") !== -1 || hName.indexOf("madre") !== -1 || hName.indexOf("titular") !== -1 || (hName.indexOf("nombre") !== -1 && hName.indexOf("alumn") === -1))) {
+      colRep = h;
+    } else if (colId === -1 && (hName.indexOf("id") !== -1 || hName.indexOf("cedula") !== -1 || hName.indexOf("identific") !== -1 || hName.indexOf("dni") !== -1 || hName.indexOf("codigo") !== -1)) {
+      colId = h;
+    } else if (colTel === -1 && (hName.indexOf("tel") !== -1 || hName.indexOf("cel") !== -1 || hName.indexOf("whats") !== -1 || hName.indexOf("movil") !== -1 || hName.indexOf("contact") !== -1)) {
+      colTel = h;
+    } else if (colNivel === -1 && (hName.indexOf("nivel") !== -1 || hName.indexOf("categor") !== -1 || hName.indexOf("grupo") !== -1)) {
+      colNivel = h;
+    } else if (colEstado === -1 && (hName.indexOf("estado") !== -1 || hName.indexOf("status") !== -1 || hName.indexOf("activ") !== -1)) {
+      colEstado = h;
+    }
+  }
+
+  // Fallbacks por posición estándar si no se identificaron encabezados
+  if (colId === -1) colId = 0;
+  if (colRep === -1) colRep = 1;
+  if (colTel === -1) colTel = 2;
+  if (colEmail === -1) colEmail = 3;
+  if (colAlumna === -1) colAlumna = 4;
+  if (colNivel === -1) colNivel = 5;
+  if (colEstado === -1) colEstado = 6;
+  
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var idCliente = row[colId] ? row[colId].toString().replace(/\D/g, "") : "";
+    var cellEmailRaw = row[colEmail] ? row[colEmail].toString() : "";
+    var emailNorm = normalizarEmailGAS(cellEmailRaw);
+    var telefono = row[colTel] ? row[colTel].toString().replace(/\D/g, "") : "";
+    var nombreAlumna = row[colAlumna] ? row[colAlumna].toString().trim() : "";
+    var nombreRep = row[colRep] ? row[colRep].toString().trim() : "";
+    var nombreAlumnaNorm = nombreAlumna.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    var nombreRepNorm = nombreRep.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    var estado = row[colEstado] ? row[colEstado].toString().trim() : "Activo";
     
-    if ((idCliente === cleanSearch || telefono.endsWith(cleanSearch)) && cleanSearch.length >= 4) {
+    // 1. Coincidencia por correo (exacto, subcadena o múltiples correos)
+    var matchEmail = false;
+    if (cleanEmail && emailNorm) {
+      matchEmail = (emailNorm === cleanEmail) || 
+                   (emailNorm.indexOf(cleanEmail) !== -1) || 
+                   (cleanEmail.indexOf(emailNorm) !== -1);
+    }
+
+    // 2. Coincidencia por cédula/teléfono
+    var matchDigits = cleanDigits && cleanDigits.length >= 4 && (idCliente === cleanDigits || telefono.indexOf(cleanDigits) !== -1);
+
+    // 3. Coincidencia por nombre
+    var matchName = !matchEmail && cleanNameQuery.length >= 4 && (nombreAlumnaNorm.indexOf(cleanNameQuery) !== -1 || nombreRepNorm.indexOf(cleanNameQuery) !== -1);
+    
+    // 4. Búsqueda de rescate en cualquier celda de la fila
+    var matchAnyCell = false;
+    if (!matchEmail && !matchDigits && !matchName && cleanEmail.length >= 5) {
+      for (var c = 0; c < row.length; c++) {
+        var cellStr = normalizarEmailGAS(row[c]);
+        if (cellStr && (cellStr === cleanEmail || cellStr.indexOf(cleanEmail) !== -1)) {
+          matchAnyCell = true;
+          break;
+        }
+      }
+    }
+    
+    if (matchEmail || matchDigits || matchName || matchAnyCell) {
       if (estado.toLowerCase() === "inactivo") {
         return { 
           success: false, 
-          message: "La alumna figura como inactiva. Por favor contáctanos directamente." 
+          message: "La alumna figura como inactiva. Por favor contáctanos directamente para reactivar su ficha." 
         };
       }
       
       return {
         success: true,
         data: {
-          ID_Cliente: row[0],
-          Nombre_Representante: row[1],
-          Telefono_WhatsApp: row[2],
-          Email: row[3],
-          Nombre_Alumna: row[4],
-          Nivel_Asignado: row[5],
+          ID_Cliente: row[colId] || idCliente,
+          Nombre_Representante: row[colRep] || nombreRep,
+          Telefono_WhatsApp: row[colTel] || telefono,
+          Email: row[colEmail] || cellEmailRaw || cleanEmail,
+          Nombre_Alumna: row[colAlumna] || nombreAlumna,
+          Nivel_Asignado: row[colNivel] || "Básico",
           Estado: estado
         }
       };
@@ -227,8 +399,74 @@ function buscarAlumnaPorID(sheet, idSearch) {
   
   return { 
     success: false, 
-    message: "No encontramos una alumna registrada con la identificación o teléfono ingresado. Verifique el número o comuníquese con secretaría." 
+    message: "No encontramos una alumna registrada con el correo (" + rawSearch + "). Puedes registrar tu ficha rápida ahora o verificar con secretaría." 
   };
+}
+
+/**
+ * 💾 Helper: Guardar o Actualizar Alumna en 'Alumnas_Niveles'
+ */
+function guardarOActualizarAlumnaEnSheet(sheet, studentData) {
+  var alumnosSheet = sheet.getSheetByName("Alumnas_Niveles");
+  if (!alumnosSheet) {
+    alumnosSheet = sheet.insertSheet("Alumnas_Niveles");
+    alumnosSheet.appendRow([
+      "ID_Cliente",
+      "Nombre_Representante",
+      "Telefono_WhatsApp",
+      "Email",
+      "Nombre_Alumna",
+      "Nivel_Asignado",
+      "Estado"
+    ]);
+  }
+
+  function sanitize(val) {
+    if (typeof val === "string" && /^[=+\-@\t\r]/.test(val)) {
+      return "'" + val;
+    }
+    return val || "";
+  }
+
+  var idCliente = (studentData.ID_Cliente || studentData.idCliente || ("" + Math.floor(1700000000 + Math.random() * 900000000))).toString().trim();
+  var email = (studentData.Email || studentData.email || "").toString().trim();
+  var normEmail = normalizarEmailGAS(email);
+  var nombreAlumna = (studentData.Nombre_Alumna || studentData.nombreAlumna || "").toString().trim();
+  var nombreRep = (studentData.Nombre_Representante || studentData.nombreRepresentante || nombreAlumna).toString().trim();
+  var telefono = (studentData.Telefono_WhatsApp || studentData.telefonoWhatsApp || "").toString().trim();
+  var nivel = (studentData.Nivel_Asignado || studentData.nivelAsignado || "Básico").toString().trim();
+  var estado = (studentData.Estado || studentData.estado || "Activo").toString().trim();
+
+  var data = alumnosSheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    var rowId = data[i][0] ? data[i][0].toString().trim() : "";
+    var rowEmail = data[i][3] ? normalizarEmailGAS(data[i][3]) : "";
+
+    if ((idCliente && rowId === idCliente) || (normEmail && rowEmail === normEmail)) {
+      alumnosSheet.getRange(i + 1, 1, 1, 7).setValues([[
+        sanitize(idCliente),
+        sanitize(nombreRep),
+        sanitize(telefono),
+        sanitize(email.toLowerCase()),
+        sanitize(nombreAlumna),
+        sanitize(nivel),
+        sanitize(estado)
+      ]]);
+      return { success: true, message: "Ficha de " + nombreAlumna + " actualizada en Google Sheets." };
+    }
+  }
+
+  alumnosSheet.appendRow([
+    sanitize(idCliente),
+    sanitize(nombreRep),
+    sanitize(telefono),
+    sanitize(email.toLowerCase()),
+    sanitize(nombreAlumna),
+    sanitize(nivel),
+    sanitize(estado)
+  ]);
+
+  return { success: true, message: "Ficha de " + nombreAlumna + " registrada con éxito en Google Sheets." };
 }
 
 /**
@@ -244,18 +482,45 @@ function obtenerTodasLasAlumnas(sheet) {
     return { success: true, data: [], message: "No hay registros en la pestaña 'Alumnas_Niveles'." };
   }
 
+  // Detección dinámica de columnas
+  const headers = data[0].map(function(h) {
+    return (h || "").toString().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  });
+
+  var colId = -1, colRep = -1, colTel = -1, colEmail = -1, colAlumna = -1, colNivel = -1, colEstado = -1;
+  for (var h = 0; h < headers.length; h++) {
+    var hName = headers[h];
+    if (colEmail === -1 && (hName.indexOf("email") !== -1 || hName.indexOf("correo") !== -1 || hName.indexOf("mail") !== -1)) colEmail = h;
+    else if (colAlumna === -1 && (hName.indexOf("alumn") !== -1 || hName.indexOf("estudiant") !== -1 || (hName.indexOf("nombre") !== -1 && hName.indexOf("rep") === -1 && hName.indexOf("tutor") === -1 && hName.indexOf("padre") === -1))) colAlumna = h;
+    else if (colRep === -1 && (hName.indexOf("represent") !== -1 || hName.indexOf("tutor") !== -1 || hName.indexOf("padre") !== -1 || hName.indexOf("madre") !== -1 || hName.indexOf("titular") !== -1)) colRep = h;
+    else if (colId === -1 && (hName.indexOf("id") !== -1 || hName.indexOf("cedula") !== -1 || hName.indexOf("identific") !== -1 || hName.indexOf("dni") !== -1)) colId = h;
+    else if (colTel === -1 && (hName.indexOf("tel") !== -1 || hName.indexOf("cel") !== -1 || hName.indexOf("whats") !== -1 || hName.indexOf("movil") !== -1)) colTel = h;
+    else if (colNivel === -1 && (hName.indexOf("nivel") !== -1 || hName.indexOf("categor") !== -1 || hName.indexOf("grupo") !== -1)) colNivel = h;
+    else if (colEstado === -1 && (hName.indexOf("estado") !== -1 || hName.indexOf("status") !== -1 || hName.indexOf("activ") !== -1)) colEstado = h;
+  }
+
+  if (colId === -1) colId = 0;
+  if (colRep === -1) colRep = 1;
+  if (colTel === -1) colTel = 2;
+  if (colEmail === -1) colEmail = 3;
+  if (colAlumna === -1) colAlumna = 4;
+  if (colNivel === -1) colNivel = 5;
+  if (colEstado === -1) colEstado = 6;
+
   const list = [];
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (!row[0] && !row[4]) continue; // Fila vacía
+    if (!row[colId] && !row[colAlumna] && !row[colEmail]) continue; // Fila vacía
     list.push({
-      ID_Cliente: row[0] ? row[0].toString().trim() : "",
-      Nombre_Representante: row[1] ? row[1].toString().trim() : "",
-      Telefono_WhatsApp: row[2] ? row[2].toString().trim() : "",
-      Email: row[3] ? row[3].toString().trim() : "",
-      Nombre_Alumna: row[4] ? row[4].toString().trim() : "",
-      Nivel_Asignado: row[5] ? row[5].toString().trim() : "Principiante",
-      Estado: row[6] ? row[6].toString().trim() : "Activo"
+      ID_Cliente: row[colId] ? row[colId].toString().trim() : "",
+      Nombre_Representante: row[colRep] ? row[colRep].toString().trim() : "",
+      Telefono_WhatsApp: row[colTel] ? row[colTel].toString().trim() : "",
+      Email: row[colEmail] ? row[colEmail].toString().trim() : "",
+      Nombre_Alumna: row[colAlumna] ? row[colAlumna].toString().trim() : "",
+      Nivel_Asignado: row[colNivel] ? row[colNivel].toString().trim() : "Principiante",
+      Estado: row[colEstado] ? row[colEstado].toString().trim() : "Activo"
     });
   }
 
@@ -317,7 +582,18 @@ function obtenerHorariosPorNivel(sheet, nivelRequerido) {
     const sede = row[1];
     const nivel = row[2];
     const dia = row[3];
-    const horario = row[4];
+    let horario = row[4];
+
+    // Formatear fechas/horas si Google Sheets devuelve objeto Date
+    if (horario instanceof Date) {
+      horario = Utilities.formatDate(horario, "America/Guayaquil", "HH:mm");
+    } else if (horario && typeof horario === "string" && horario.indexOf("1899-12-30") !== -1) {
+      try {
+        var d = new Date(horario);
+        horario = Utilities.formatDate(d, "America/Guayaquil", "HH:mm");
+      } catch(e) {}
+    }
+
     const cupoMax = Number(row[5]) || 0;
     const cuposOcupados = Number(row[6]) || 0;
     let estadoHorario = row[7];
@@ -354,14 +630,22 @@ function obtenerHorariosPorNivel(sheet, nivelRequerido) {
 function actualizarCupoHorario(sheet, idHorario, textoHorario, sede) {
   const horariosSheet = sheet.getSheetByName("Sedes_Horarios");
   const data = horariosSheet.getDataRange().getValues();
+  const idList = idHorario ? idHorario.toString().split(",").map(function(s){ return s.trim(); }) : [];
   
   for (let i = 1; i < data.length; i++) {
-    const rowId = data[i][0];
-    const rowSede = data[i][1];
-    const rowHorario = data[i][4];
+    const rowId = data[i][0] ? data[i][0].toString().trim() : "";
+    const rowSede = data[i][1] ? data[i][1].toString().trim() : "";
+    const rowDia = data[i][3] ? data[i][3].toString().trim() : "";
+    const rowHorario = data[i][4] ? data[i][4].toString().trim() : "";
     
     // Coincidencia por ID o por Texto + Sede
-    if ((idHorario && rowId === idHorario) || (rowSede === sede && textoHorario.includes(rowHorario))) {
+    const matchesId = idList.indexOf(rowId) !== -1;
+    const matchesTexto = (rowSede === sede || !sede) && (
+      (rowHorario && textoHorario.indexOf(rowHorario) !== -1) || 
+      (rowDia && textoHorario.indexOf(rowDia) !== -1)
+    );
+
+    if (matchesId || matchesTexto) {
       const currentOccupied = Number(data[i][6]) || 0;
       const maxCupos = Number(data[i][5]) || 0;
       const newOccupied = currentOccupied + 1;
@@ -373,7 +657,6 @@ function actualizarCupoHorario(sheet, idHorario, textoHorario, sede) {
       if (newOccupied >= maxCupos) {
         horariosSheet.getRange(i + 1, 8).setValue("Lleno");
       }
-      break;
     }
   }
 }
@@ -495,6 +778,133 @@ function sincronizarTodosLosHorarios(sheet, schedulesList) {
     success: true,
     message: "Se sincronizaron " + rows.length + " horarios en Google Sheets."
   };
+}
+
+/**
+ * 📋 Helper: Obtener todos los registros de Lista de Espera
+ */
+function obtenerTodaListaEspera(sheet) {
+  let esperaSheet = sheet.getSheetByName("Lista_Espera");
+  if (!esperaSheet) {
+    esperaSheet = sheet.insertSheet("Lista_Espera");
+    esperaSheet.appendRow([
+      "ID_Espera",
+      "Fecha_Registro",
+      "ID_Cliente",
+      "Nombre_Alumna",
+      "Email",
+      "Telefono_WhatsApp",
+      "ID_Horario",
+      "Sede",
+      "Nivel_Requerido",
+      "Dia",
+      "Horario",
+      "Estado_Espera",
+      "Notas"
+    ]);
+    return { success: true, data: [] };
+  }
+
+  const data = esperaSheet.getDataRange().getValues();
+  if (data.length <= 1) return { success: true, data: [] };
+
+  const entries = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+    entries.push({
+      ID_Espera: String(row[0]),
+      Fecha_Registro: String(row[1]),
+      ID_Cliente: String(row[2]),
+      Nombre_Alumna: String(row[3]),
+      Email: String(row[4]),
+      Telefono_WhatsApp: String(row[5]),
+      ID_Horario: String(row[6]),
+      Sede: String(row[7]),
+      Nivel_Requerido: String(row[8]),
+      Dia: String(row[9]),
+      Horario: String(row[10]),
+      Estado_Espera: String(row[11] || "Pendiente"),
+      Notas: String(row[12] || "")
+    });
+  }
+
+  return { success: true, data: entries };
+}
+
+/**
+ * 📝 Helper: Registrar Alumna en Lista de Espera
+ */
+function registrarEnListaEspera(sheet, contents) {
+  let esperaSheet = sheet.getSheetByName("Lista_Espera");
+  if (!esperaSheet) {
+    esperaSheet = sheet.insertSheet("Lista_Espera");
+    esperaSheet.appendRow([
+      "ID_Espera",
+      "Fecha_Registro",
+      "ID_Cliente",
+      "Nombre_Alumna",
+      "Email",
+      "Telefono_WhatsApp",
+      "ID_Horario",
+      "Sede",
+      "Nivel_Requerido",
+      "Dia",
+      "Horario",
+      "Estado_Espera",
+      "Notas"
+    ]);
+  }
+
+  const fechaRegistro = Utilities.formatDate(new Date(), "America/Guayaquil", "yyyy-MM-dd HH:mm:ss");
+  const idEspera = "ESP-" + new Date().getFullYear() + "-" + Math.floor(1000 + Math.random() * 9000);
+
+  function sanitize(val) {
+    if (typeof val === "string" && /^[=+\\-@\\t\\r]/.test(val)) {
+      return "'" + val;
+    }
+    return val || "";
+  }
+
+  esperaSheet.appendRow([
+    sanitize(idEspera),
+    sanitize(fechaRegistro),
+    sanitize(contents.ID_Cliente || contents.idCliente),
+    sanitize(contents.Nombre_Alumna || contents.nombreAlumna),
+    sanitize(contents.Email || contents.email),
+    sanitize(contents.Telefono_WhatsApp || contents.telefonoWhatsApp),
+    sanitize(contents.ID_Horario || contents.idHorario),
+    sanitize(contents.Sede || contents.sede),
+    sanitize(contents.Nivel_Requerido || contents.nivelRequerido),
+    sanitize(contents.Dia || contents.dia),
+    sanitize(contents.Horario || contents.horario),
+    "Pendiente",
+    sanitize(contents.Notas || contents.notas || "")
+  ]);
+
+  return {
+    success: true,
+    message: "¡Te has unido con éxito a la lista de espera! Te contactaremos apenas se libere un cupo.",
+    ID_Espera: idEspera
+  };
+}
+
+/**
+ * ✏️ Helper: Actualizar Estado en Lista de Espera
+ */
+function actualizarEstadoListaEspera(sheet, idEspera, nuevoEstado) {
+  const esperaSheet = sheet.getSheetByName("Lista_Espera");
+  if (!esperaSheet) return { success: false, message: "No se encontró la pestaña Lista_Espera." };
+
+  const data = esperaSheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(idEspera)) {
+      esperaSheet.getRange(i + 1, 12).setValue(nuevoEstado || "Pendiente");
+      return { success: true, message: "Estado de lista de espera actualizado." };
+    }
+  }
+
+  return { success: false, message: "No se encontró el registro en la lista de espera." };
 }
 
 /**
@@ -791,6 +1201,13 @@ export const GOOGLE_SHEETS_STRUCTURE = {
     headers: ["ID_Registro", "Fecha_Registro", "ID_Cliente", "Nombre_Alumna", "Sede", "Horario_Seleccionado", "URL_Comprobante_Drive", "Estado_Inscripcion", "Notificado_Confirmacion"],
     sampleRows: [
       ["INS-2026-9812", "2026-08-20 14:32:10", "1726354490", "Sofia Torres", "Sede Norte (Principal)", "Lunes y Miércoles | 15:00 - 16:30", "https://drive.google.com/...", "Confirmado", "SI"]
+    ]
+  },
+  tab4: {
+    name: "Lista_Espera",
+    headers: ["ID_Espera", "Fecha_Registro", "ID_Cliente", "Nombre_Alumna", "Email", "Telefono_WhatsApp", "ID_Horario", "Sede", "Nivel_Requerido", "Dia", "Horario", "Estado_Espera", "Notas"],
+    sampleRows: [
+      ["ESP-2026-1042", "2026-08-22 10:15:00", "0987654321", "Isabella Benítez", "valeria.b@gmail.com", "+593987654321", "HOR-002", "Sede Norte (Principal)", "Principiante", "Martes y Jueves", "16:30 - 18:00", "Pendiente", "Interesada si se abre cupo en la tarde"]
     ]
   }
 };

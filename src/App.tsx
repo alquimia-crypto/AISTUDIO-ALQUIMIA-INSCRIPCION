@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AlumnaNivel, SedeHorario, AppSettings } from './types';
-import { getAppSettings, isAdminSessionActive, setAdminSession } from './services/api';
+import { AlumnaNivel, SedeHorario, SelectedPlanInfo, AppSettings } from './types';
+import { getAppSettings, isAdminSessionActive, setAdminSession, touchAdminSession } from './services/api';
 import { Navbar } from './components/Navbar';
 import { Step1Identification } from './components/Step1Identification';
 import { Step2ScheduleSelection } from './components/Step2ScheduleSelection';
@@ -24,6 +24,7 @@ export default function App() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedStudent, setSelectedStudent] = useState<AlumnaNivel | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<SedeHorario | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlanInfo | null>(null);
   const [lastRegistrationId, setLastRegistrationId] = useState<string>('');
   const [lastDriveUrl, setLastDriveUrl] = useState<string>('');
   const [settings, setSettings] = useState<AppSettings>(getAppSettings());
@@ -33,6 +34,37 @@ export default function App() {
   const [showAdminLoginModal, setShowAdminLoginModal] = useState<boolean>(false);
   const [showChangePinModal, setShowChangePinModal] = useState<boolean>(false);
   const [pendingAdminTab, setPendingAdminTab] = useState<'dashboard' | 'code' | 'sheets'>('dashboard');
+
+  // Monitor session expiration periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const active = isAdminSessionActive();
+      if (isAdmin && !active) {
+        setIsAdmin(false);
+        if (['dashboard', 'code', 'sheets'].includes(currentTab)) {
+          setCurrentTab('form');
+        }
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [isAdmin, currentTab]);
+
+  // Refresh active session on user interaction in admin mode
+  useEffect(() => {
+    if (!isAdmin) return;
+    const handleUserActivity = () => {
+      touchAdminSession();
+    };
+
+    window.addEventListener('click', handleUserActivity);
+    window.addEventListener('keydown', handleUserActivity);
+
+    return () => {
+      window.removeEventListener('click', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+    };
+  }, [isAdmin]);
 
   // Route protection for internal admin tabs
   const handleTabChange = (tab: 'form' | 'dashboard' | 'status' | 'code' | 'sheets') => {
@@ -63,8 +95,9 @@ export default function App() {
     setStep(2);
   };
 
-  const handleScheduleSelected = (schedule: SedeHorario) => {
-    setSelectedSchedule(schedule);
+  const handlePlanSelected = (plan: SelectedPlanInfo) => {
+    setSelectedPlan(plan);
+    setSelectedSchedule(plan.schedules[0] || null);
     setStep(3);
   };
 
@@ -77,6 +110,7 @@ export default function App() {
   const handleResetForm = () => {
     setSelectedStudent(null);
     setSelectedSchedule(null);
+    setSelectedPlan(null);
     setLastRegistrationId('');
     setLastDriveUrl('');
     setStep(1);
@@ -221,25 +255,27 @@ export default function App() {
               <Step2ScheduleSelection
                 student={selectedStudent}
                 onBack={() => setStep(1)}
-                onScheduleSelected={handleScheduleSelected}
+                onPlanSelected={handlePlanSelected}
               />
             )}
 
             {/* Step 3 View */}
-            {step === 3 && selectedStudent && selectedSchedule && (
+            {step === 3 && selectedStudent && (selectedPlan || selectedSchedule) && (
               <Step3ReceiptUpload
                 student={selectedStudent}
-                schedule={selectedSchedule}
+                schedule={selectedSchedule || undefined}
+                planInfo={selectedPlan || undefined}
                 onBack={() => setStep(2)}
                 onSuccess={handleRegistrationSuccess}
               />
             )}
 
             {/* Step 4 View */}
-            {step === 4 && selectedStudent && selectedSchedule && (
+            {step === 4 && selectedStudent && (selectedPlan || selectedSchedule) && (
               <Step4Confirmation
                 student={selectedStudent}
-                schedule={selectedSchedule}
+                schedule={selectedSchedule || undefined}
+                planInfo={selectedPlan || undefined}
                 idRegistro={lastRegistrationId}
                 driveUrl={lastDriveUrl}
                 onNewRegistration={handleResetForm}

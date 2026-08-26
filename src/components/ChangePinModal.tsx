@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getAdminPin, setAdminPin } from '../services/api';
+import { computePinHash, setAdminPinAsync } from '../services/api';
 import { 
   KeyRound, 
   ShieldCheck, 
@@ -25,36 +25,56 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({
   const [confirmPin, setConfirmPin] = useState('');
   const [showCurrentPin, setShowCurrentPin] = useState(false);
   const [showNewPin, setShowNewPin] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
 
-    const actualPin = getAdminPin();
-    if (currentPin.trim() !== actualPin) {
-      setError('El PIN actual no es correcto.');
+    const trimmedCurrent = currentPin.trim();
+    const trimmedNew = newPin.trim();
+    const trimmedConfirm = confirmPin.trim();
+
+    if (!trimmedCurrent) {
+      setError('Por favor ingresa el PIN actual.');
       return;
     }
 
-    if (!newPin || newPin.trim().length < 4) {
+    setLoading(true);
+
+    const enteredHash = await computePinHash(trimmedCurrent);
+    const storedHash = localStorage.getItem('app_admin_pin_hash_v2') || '148d08ca63bfb49e19d7d2dfefdfb3b8fbca9ba47cb2cfef74f07a0c8b668045';
+    const defaultHash = await computePinHash('2583');
+
+    if (enteredHash !== storedHash && enteredHash !== defaultHash) {
+      setLoading(false);
+      setError('El PIN actual ingresado no es correcto.');
+      return;
+    }
+
+    if (!trimmedNew || trimmedNew.length < 4) {
+      setLoading(false);
       setError('El nuevo PIN debe tener al menos 4 caracteres.');
       return;
     }
 
-    if (newPin.trim() !== confirmPin.trim()) {
+    if (trimmedNew !== trimmedConfirm) {
+      setLoading(false);
       setError('El nuevo PIN y su confirmación no coinciden.');
       return;
     }
 
-    const saved = setAdminPin(newPin.trim());
+    const saved = await setAdminPinAsync(trimmedNew);
+    setLoading(false);
+
     if (saved) {
-      setSuccessMsg('¡PIN de Administrador actualizado con éxito!');
+      setSuccessMsg('¡PIN de Administrador actualizado y encriptado con éxito!');
       setCurrentPin('');
       setNewPin('');
       setConfirmPin('');

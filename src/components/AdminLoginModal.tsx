@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { checkAdminPin, setAdminSession } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { verifyAdminPinAsync, getAdminLockoutStatus } from '../services/api';
 import { 
   ShieldCheck, 
   Lock, 
@@ -8,7 +8,8 @@ import {
   EyeOff, 
   X, 
   AlertCircle,
-  Sparkles
+  Timer,
+  ShieldAlert
 } from 'lucide-react';
 
 interface AdminLoginModalProps {
@@ -26,11 +27,40 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  // Verificar estado de bloqueo al abrir el modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const status = getAdminLockoutStatus();
+    if (status.isLocked) {
+      setLockoutSeconds(status.remainingSeconds);
+    }
+  }, [isOpen]);
+
+  // Manejar contador regresivo de bloqueo
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setError(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [lockoutSeconds]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutSeconds > 0) return;
+
     if (!pin.trim()) {
       setError('Por favor ingresa el PIN de acceso.');
       return;
@@ -39,19 +69,19 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      const isValid = checkAdminPin(pin);
-      if (isValid) {
-        setAdminSession(true);
-        setPin('');
-        setError(null);
-        setLoading(false);
-        onSuccess();
-      } else {
-        setError('PIN incorrecto. Verifica la clave de administración.');
-        setLoading(false);
+    const result = await verifyAdminPinAsync(pin);
+    setLoading(false);
+
+    if (result.success) {
+      setPin('');
+      setError(null);
+      onSuccess();
+    } else {
+      setError(result.message || 'PIN incorrecto. Verifica la clave.');
+      if (result.remainingLockoutSeconds && result.remainingLockoutSeconds > 0) {
+        setLockoutSeconds(result.remainingLockoutSeconds);
       }
-    }, 300);
+    }
   };
 
   return (
@@ -79,9 +109,26 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
           <h3 className="text-xl font-bold text-slate-900">Acceso Administrativo</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-            Panel exclusivo para tesorería, profesores y directores de la academia.
+            Panel protegido para tesorería, profesores y directores de la academia.
           </p>
         </div>
+
+        {/* Lockout Warning Banner */}
+        {lockoutSeconds > 0 && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 text-xs space-y-2">
+            <div className="flex items-center space-x-2 font-bold text-amber-800">
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Acceso Temporalmente Bloqueado</span>
+            </div>
+            <p className="text-amber-700 leading-relaxed">
+              Por medidas de seguridad ante múltiples intentos fallidos, debes esperar:
+            </p>
+            <div className="flex items-center space-x-2 font-mono font-bold text-base text-amber-900 bg-amber-100/70 px-3 py-1.5 rounded-xl w-fit">
+              <Timer className="w-4 h-4 animate-pulse text-amber-700" />
+              <span>{lockoutSeconds}s restantes</span>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -96,18 +143,20 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <input
                 type={showPin ? 'text' : 'password'}
                 value={pin}
+                disabled={lockoutSeconds > 0 || loading}
                 onChange={(e) => {
                   setPin(e.target.value);
                   if (error) setError(null);
                 }}
                 placeholder="Ingresa el PIN de 4 dígitos"
                 autoFocus
-                className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-center tracking-widest text-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-center tracking-widest text-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:bg-slate-100 cursor-text"
               />
               <button
                 type="button"
+                disabled={lockoutSeconds > 0}
                 onClick={() => setShowPin(!showPin)}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer disabled:opacity-40"
               >
                 {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -115,7 +164,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
 
           {/* Error Message */}
-          {error && (
+          {error && lockoutSeconds <= 0 && (
             <div className="flex items-center space-x-2 bg-red-50 text-red-700 p-3 rounded-xl border border-red-200 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
@@ -125,13 +174,18 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-md shadow-indigo-200 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+            disabled={loading || lockoutSeconds > 0}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-md shadow-indigo-200 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <span className="flex items-center space-x-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                <span>Verificando...</span>
+                <span>Verificando de forma segura...</span>
+              </span>
+            ) : lockoutSeconds > 0 ? (
+              <span className="flex items-center space-x-2 text-amber-100">
+                <Timer className="w-4 h-4" />
+                <span>Bloqueado ({lockoutSeconds}s)</span>
               </span>
             ) : (
               <>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { APPS_SCRIPT_CODE, GOOGLE_SHEETS_STRUCTURE } from '../data/appsScriptCode';
 import { AppSettings } from '../types';
-import { saveAppSettings, getAdminPin, setAdminPin } from '../services/api';
+import { saveAppSettings, setAdminPinAsync } from '../services/api';
 import { 
   Code2, 
   Copy, 
@@ -19,7 +19,9 @@ import {
   HelpCircle,
   KeyRound,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface GasScriptModalProps {
@@ -42,7 +44,10 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
   const [pingResult, setPingResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Admin PIN management state
-  const [adminPinInput, setAdminPinInput] = useState(getAdminPin());
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinConfirm, setAdminPinConfirm] = useState('');
+  const [showAdminPin, setShowAdminPin] = useState(false);
+  const [pinSaving, setPinSaving] = useState(false);
   const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleCopyCode = () => {
@@ -51,15 +56,26 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
-  const handleUpdateAdminPin = (e: React.FormEvent) => {
+  const handleUpdateAdminPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminPinInput || adminPinInput.trim().length < 4) {
-      setPinMessage({ type: 'error', text: 'El PIN debe tener al menos 4 caracteres.' });
+    const trimmed = adminPinInput.trim();
+    if (!trimmed || trimmed.length < 4) {
+      setPinMessage({ type: 'error', text: 'El nuevo PIN debe tener al menos 4 caracteres.' });
       return;
     }
-    const success = setAdminPin(adminPinInput.trim());
+    if (trimmed !== adminPinConfirm.trim()) {
+      setPinMessage({ type: 'error', text: 'El nuevo PIN y su confirmación no coinciden.' });
+      return;
+    }
+
+    setPinSaving(true);
+    const success = await setAdminPinAsync(trimmed);
+    setPinSaving(false);
+
     if (success) {
-      setPinMessage({ type: 'success', text: '¡PIN de administrador actualizado exitosamente!' });
+      setAdminPinInput('');
+      setAdminPinConfirm('');
+      setPinMessage({ type: 'success', text: '¡PIN de administrador actualizado y encriptado con SHA-256!' });
       setTimeout(() => setPinMessage(null), 3500);
     } else {
       setPinMessage({ type: 'error', text: 'No se pudo guardar el PIN.' });
@@ -499,22 +515,47 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
           <form onSubmit={handleUpdateAdminPin} className="max-w-lg space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                PIN de Acceso al Panel de Control
+                Nuevo PIN de Acceso al Panel
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                   <KeyRound className="w-4 h-4" />
                 </div>
                 <input
-                  type="text"
+                  type={showAdminPin ? 'text' : 'password'}
                   value={adminPinInput}
                   onChange={(e) => setAdminPinInput(e.target.value)}
-                  placeholder="Ingresa tu nueva clave de acceso"
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-sm focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  placeholder="Ingresa tu nuevo PIN (mín. 4 caracteres)"
+                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-sm focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPin(!showAdminPin)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                Confirmar Nuevo PIN
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type={showAdminPin ? 'text' : 'password'}
+                  value={adminPinConfirm}
+                  onChange={(e) => setAdminPinConfirm(e.target.value)}
+                  placeholder="Repite el nuevo PIN"
+                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-sm focus:ring-2 focus:ring-purple-600 focus:outline-none"
                 />
               </div>
               <p className="text-[11px] text-slate-500 mt-1.5">
-                Mínimo 4 dígitos o letras. Cámbialo cuando lo necesites.
+                El PIN se guardará cifrado con SHA-256 para proteger el panel contra miradas no autorizadas.
               </p>
             </div>
 
@@ -535,10 +576,11 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
 
             <button
               type="submit"
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-2"
+              disabled={pinSaving}
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-2 disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Guardar Nuevo PIN</span>
+              <span>{pinSaving ? 'Encriptando y Guardando...' : 'Guardar Nuevo PIN Cifrado'}</span>
             </button>
           </form>
 

@@ -1,5 +1,7 @@
 import React from 'react';
-import { AlumnaNivel, SedeHorario } from '../types';
+import { AlumnaNivel, SedeHorario, SelectedPlanInfo } from '../types';
+import { formatFriendlyTime } from '../services/api';
+import { getWhatsAppUrl } from '../utils/pricing';
 import { 
   CheckCircle2, 
   ExternalLink, 
@@ -11,12 +13,15 @@ import {
   Clock, 
   Mail, 
   Sparkles,
-  Download
+  Download,
+  CalendarDays,
+  DollarSign
 } from 'lucide-react';
 
 interface Step4Props {
   student: AlumnaNivel;
-  schedule: SedeHorario;
+  schedule?: SedeHorario;
+  planInfo?: SelectedPlanInfo;
   idRegistro: string;
   driveUrl: string;
   onNewRegistration: () => void;
@@ -26,22 +31,36 @@ interface Step4Props {
 export const Step4Confirmation: React.FC<Step4Props> = ({
   student,
   schedule,
+  planInfo,
   idRegistro,
   driveUrl,
   onNewRegistration,
   onGoToStatus
 }) => {
-  const whatsappMessage = encodeURIComponent(
-    `¡Hola Alquimia Danza Aérea! He completado la inscripción de mi alumna ${student.Nombre_Alumna}.\n\n` +
-    `📌 Código de Registro: ${idRegistro}\n` +
-    `📍 Sede: ${schedule.Sede}\n` +
-    `⏰ Horario: ${schedule.Dia} (${schedule.Horario})\n` +
+  const sedeName = planInfo ? planInfo.sede : (schedule?.Sede || 'Sede Principal');
+  const monthlyHours = planInfo ? planInfo.totalMonthlyHours : 8;
+  const totalPrice = planInfo ? planInfo.monthlyPrice : 75;
+  const schedulesList = planInfo?.schedules && planInfo.schedules.length > 0 
+    ? planInfo.schedules 
+    : (schedule ? [schedule] : []);
+
+  const horariosDetail = schedulesList.map((s) => `${s.Dia} (${formatFriendlyTime(s.Horario)})`).join(', ');
+
+  const queryMessage = 
+    `¡Hola Alquimia Danza Aérea! Quisiera consultar sobre la inscripción de mi alumna:\n\n` +
+    `👤 Alumna: ${student.Nombre_Alumna}\n` +
+    `📌 ID de Registro: ${idRegistro}\n` +
+    `📍 Sede: ${sedeName}\n` +
+    `⏰ Horarios: ${horariosDetail}\n` +
+    `⏳ Plan: ${monthlyHours} horas al mes ($${totalPrice} USD)\n` +
     `👤 Representante: ${student.Nombre_Representante}\n\n` +
-    `Quedo atento/a a la confirmación de mi comprobante.`
-  );
+    `¿Podrían confirmarme el estado y detalles de mi solicitud? Muchas gracias.`;
+
+  const whatsappUrl = getWhatsAppUrl(queryMessage);
+
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
+    <div className="space-y-6 max-w-3xl mx-auto pb-10">
       
       {/* Success Card */}
       <div className="bg-gradient-to-b from-emerald-950 via-slate-900 to-slate-950 text-white rounded-3xl p-8 sm:p-10 shadow-2xl text-center relative overflow-hidden space-y-6">
@@ -87,11 +106,23 @@ export const Step4Confirmation: React.FC<Step4Props> = ({
             </div>
             <div>
               <span className="text-xs text-slate-400 block">Sede:</span>
-              <span className="font-semibold text-white">{schedule.Sede}</span>
+              <span className="font-semibold text-white">{sedeName}</span>
             </div>
             <div>
-              <span className="text-xs text-slate-400 block">Horario Reservado:</span>
-              <span className="font-semibold text-white">{schedule.Dia} ({schedule.Horario})</span>
+              <span className="text-xs text-slate-400 block">Plan & Tarifa:</span>
+              <span className="font-bold text-emerald-300">{monthlyHours} hrs/mes (${totalPrice}.00 USD)</span>
+            </div>
+          </div>
+
+          {/* Días y Horarios */}
+          <div className="pt-2 border-t border-white/10">
+            <span className="text-xs text-slate-400 block mb-1">Días y Horarios Reservados:</span>
+            <div className="flex flex-wrap gap-1.5">
+              {schedulesList.map((item, idx) => (
+                <span key={idx} className="bg-white/15 text-white text-xs px-2.5 py-0.5 rounded-md font-medium">
+                  {item.Dia} • {formatFriendlyTime(item.Horario)}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -123,13 +154,13 @@ export const Step4Confirmation: React.FC<Step4Props> = ({
         {/* Action Buttons */}
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
           <a
-            href={`https://wa.me/593983944951?text=${whatsappMessage}`}
+            href={whatsappUrl}
             target="_blank"
             rel="noreferrer"
             className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-3.5 rounded-xl transition-all flex items-center justify-center space-x-2 shadow-lg shadow-emerald-900/40 cursor-pointer"
           >
             <MessageSquare className="w-5 h-5" />
-            <span>Notificar Secretaría por WhatsApp</span>
+            <span>Consultar por WhatsApp</span>
           </a>
 
           <button

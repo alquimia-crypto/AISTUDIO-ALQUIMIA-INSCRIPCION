@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Inscripcion } from '../types';
-import { getRegistrationsByStudentId } from '../services/api';
+import { getRegistrationsByStudentId, formatFriendlyTime } from '../services/api';
+import { getWhatsAppUrl } from '../utils/pricing';
 import { 
   Search, 
   Loader2, 
@@ -12,7 +13,9 @@ import {
   MapPin, 
   FileText,
   User,
-  Sparkles
+  Sparkles,
+  MessageSquare,
+  Mail
 } from 'lucide-react';
 
 export const StatusChecker: React.FC = () => {
@@ -38,6 +41,19 @@ export const StatusChecker: React.FC = () => {
     }
   };
 
+  const getRegistrationWhatsAppMessage = (reg: Inscripcion) => {
+    return (
+      `¡Hola Alquimia Danza Aérea! Quisiera consultar sobre el estado de la inscripción:\n\n` +
+      `👤 Alumna: ${reg.Nombre_Alumna}\n` +
+      `📌 ID de Registro: ${reg.ID_Registro}\n` +
+      `📍 Sede: ${reg.Sede}\n` +
+      `⏰ Horario: ${formatFriendlyTime(reg.Horario_Seleccionado)}\n` +
+      `📊 Estado Actual: ${reg.Estado_Inscripcion}\n\n` +
+      `¿Podrían brindarme asistencia sobre este registro? Muchas gracias.`
+    );
+  };
+
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       
@@ -50,35 +66,72 @@ export const StatusChecker: React.FC = () => {
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Consulta el Estado de tu Inscripción</h2>
           <p className="text-purple-200 text-sm mt-1 max-w-2xl">
-            Ingresa la Cédula/ID del representante o el número de WhatsApp para ver tus reservas y el estado de confirmación por tesorería.
+            Ingresa tu correo electrónico registrado para revisar el estado de validación de tus cupos y comprobante de pago.
           </p>
         </div>
       </div>
 
       {/* Search Input Box */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-bold text-slate-800 flex items-center space-x-2">
+            <Mail className="w-4 h-4 text-purple-600" />
+            <span>Correo Electrónico Registrado</span>
+          </label>
+          <span className="text-xs text-slate-500 font-medium">Ejemplo: maria.torres@gmail.com</span>
+        </div>
+
         <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <Search className="w-5 h-5" />
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-purple-500">
+              <Mail className="w-5 h-5" />
             </div>
             <input
-              type="text"
+              type="email"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Ingresa tu Cédula / Identificación o WhatsApp"
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white text-base transition-all"
+              placeholder="Ingresa tu correo electrónico (ej. maria.torres@gmail.com)"
+              className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white text-base transition-all font-medium"
+              autoComplete="email"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-xl transition-all flex items-center justify-center space-x-2 shadow-md shadow-purple-200 cursor-pointer disabled:opacity-50"
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-7 py-3.5 rounded-xl transition-all flex items-center justify-center space-x-2 shadow-md shadow-purple-200 cursor-pointer disabled:opacity-50 text-sm sm:text-base shrink-0"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
             <span>Consultar Registros</span>
           </button>
         </form>
+
+        {/* Sugerencias de prueba */}
+        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <span className="font-semibold text-slate-600 flex items-center space-x-1">
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>Consultar pruebas:</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchInput('maria.torres@gmail.com');
+              handleSearch('maria.torres@gmail.com');
+            }}
+            className="bg-purple-50 hover:bg-purple-100 text-purple-800 px-2.5 py-1 rounded-lg font-medium border border-purple-200 transition-colors cursor-pointer"
+          >
+            maria.torres@gmail.com
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchInput('carlos.mendoza@hotmail.com');
+              handleSearch('carlos.mendoza@hotmail.com');
+            }}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-lg font-medium border border-indigo-200 transition-colors cursor-pointer"
+          >
+            carlos.mendoza@hotmail.com
+          </button>
+        </div>
       </div>
 
       {/* Results */}
@@ -89,12 +142,25 @@ export const StatusChecker: React.FC = () => {
           </h3>
 
           {registrations.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 shadow-sm space-y-3">
+            <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 shadow-sm space-y-4">
               <Clock className="w-10 h-10 text-slate-400 mx-auto" />
-              <h4 className="font-bold text-slate-800 text-base">No hay inscripciones registradas para esta identificación</h4>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                Verifica que el número coincida con la Cédula/ID ingresada durante el registro de la alumna.
-              </p>
+              <div>
+                <h4 className="font-bold text-slate-800 text-base">No hay inscripciones registradas para este correo</h4>
+                <p className="text-sm text-slate-500 max-w-md mx-auto mt-1">
+                  Verifica que la dirección coincida con el correo ingresado durante el registro, o consúltanos directamente por WhatsApp.
+                </p>
+              </div>
+              <a
+                href={getWhatsAppUrl(
+                  `¡Hola Alquimia Danza Aérea! Quisiera consultar sobre el estado de una inscripción para el correo: ${searchInput.trim() || 'No especificado'}.`
+                )}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-all hover:shadow-md cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4 text-white" />
+                <span>Consultar por WhatsApp</span>
+              </a>
             </div>
           ) : (
             <div className="space-y-4">
@@ -138,7 +204,7 @@ export const StatusChecker: React.FC = () => {
 
                     <div className="flex items-center space-x-2 text-slate-700">
                       <Calendar className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                      <span>Horario: <strong>{reg.Horario_Seleccionado}</strong></span>
+                      <span>Horario: <strong>{formatFriendlyTime(reg.Horario_Seleccionado)}</strong></span>
                     </div>
                   </div>
 
@@ -154,6 +220,22 @@ export const StatusChecker: React.FC = () => {
                       </span>
                     </div>
                   )}
+
+                  {/* WhatsApp Inquiry Button at bottom of card */}
+                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <span className="text-xs text-slate-500">
+                      ¿Necesitas asistencia o validar tu cupo de inmediato?
+                    </span>
+                    <a
+                      href={getWhatsAppUrl(getRegistrationWhatsAppMessage(reg))}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all hover:shadow-md cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4 text-white" />
+                      <span>Consultar por WhatsApp</span>
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>

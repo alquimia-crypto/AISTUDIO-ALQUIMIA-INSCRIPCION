@@ -11,7 +11,8 @@ import {
   deleteScheduleApi,
   getAppSettings,
   syncWithGoogleSheetUrl,
-  syncWithAppsScript
+  syncWithAppsScript,
+  formatFriendlyTime
 } from '../services/api';
 import { AlumnaNivel, SedeHorario, Inscripcion, AppSettings } from '../types';
 import { 
@@ -433,7 +434,7 @@ export const SheetInspector: React.FC = () => {
                       <td className="p-3 font-mono">{row.ID_Cliente}</td>
                       <td className="p-3 font-bold text-purple-900">{row.Nombre_Alumna}</td>
                       <td className="p-3">{row.Sede}</td>
-                      <td className="p-3">{row.Horario_Seleccionado}</td>
+                      <td className="p-3">{formatFriendlyTime(row.Horario_Seleccionado)}</td>
                       <td className="p-3">
                         <select
                           value={row.Estado_Inscripcion}
@@ -601,7 +602,7 @@ export const SheetInspector: React.FC = () => {
                       <td className="p-3 font-medium text-slate-800">{sch.Sede}</td>
                       <td className="p-3 font-semibold text-purple-900">{sch.Nivel_Requerido}</td>
                       <td className="p-3 text-slate-700">{sch.Dia}</td>
-                      <td className="p-3 text-slate-700">{sch.Horario}</td>
+                      <td className="p-3 text-slate-700">{formatFriendlyTime(sch.Horario)}</td>
                       <td className="p-3 font-mono font-bold text-slate-900">{sch.Cupo_Maximo}</td>
                       <td className="p-3 font-mono font-bold text-purple-700">{sch.Cupos_Ocupados}</td>
                       <td className="p-3 font-bold">
