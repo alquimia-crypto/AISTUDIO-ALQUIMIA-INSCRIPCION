@@ -25,6 +25,7 @@ const SALT = 'alquimia_danza_aerea_sec_salt_2026';
 // Hash precalculado SHA-256 para PIN por defecto "2583" con SALT
 const DEFAULT_ADMIN_PIN_HASH = '148d08ca63bfb49e19d7d2dfefdfb3b8fbca9ba47cb2cfef74f07a0c8b668045';
 const SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutos de inactividad
+export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbznusHkSnsGoCPnLP95Eiq3mEAm4GRzFPkO60sfad3Mg5Ul9swPsEJXchILAiaTK7hjYQ/exec';
 export const DEFAULT_API_KEY = 'ALQUIMIA_SEC_KEY_2026';
 export const DEFAULT_ADMIN_TOKEN = '2583';
 
@@ -346,12 +347,17 @@ export function buildSecurePayload<T extends Record<string, any>>(payload: T): T
 
 // Default settings
 export function getAppSettings(): AppSettings {
+  const envGasUrl = (import.meta.env.VITE_GAS_WEB_APP_URL || '').trim();
+  const baseGasUrl = envGasUrl || DEFAULT_GAS_URL;
   const saved = localStorage.getItem(SETTINGS_KEY);
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
+      const activeUrl = (parsed.gasWebAppUrl && parsed.gasWebAppUrl.trim()) || baseGasUrl;
       return {
         ...parsed,
+        gasWebAppUrl: activeUrl,
+        useMockMode: parsed.useMockMode === true && !activeUrl ? true : false,
         apiKey: parsed.apiKey || DEFAULT_API_KEY,
         adminToken: parsed.adminToken || DEFAULT_ADMIN_TOKEN
       };
@@ -360,8 +366,8 @@ export function getAppSettings(): AppSettings {
     }
   }
   return {
-    gasWebAppUrl: '',
-    useMockMode: true,
+    gasWebAppUrl: baseGasUrl,
+    useMockMode: !Boolean(baseGasUrl),
     apiKey: DEFAULT_API_KEY,
     adminToken: DEFAULT_ADMIN_TOKEN
   };
