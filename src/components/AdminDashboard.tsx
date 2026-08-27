@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   getMockSchedules, 
   getMockRegistrations, 
@@ -130,9 +130,26 @@ export const AdminDashboard: React.FC = () => {
   const inscripcionesConfirmadas = registrations.filter(r => r.Estado_Inscripcion === 'Confirmado').length;
   const inscripcionesPendientes = registrations.filter(r => r.Estado_Inscripcion === 'Pendiente').length;
 
-  // Sedes list for filter & aggregation
-  const sedesList: string[] = Array.from(new Set(schedules.map(s => s.Sede)));
-  const nivelesList: string[] = Array.from(new Set(schedules.map(s => s.Nivel_Requerido)));
+  // Sedes list for filter & aggregation (guaranteeing unique, trimmed values)
+  const sedesList: string[] = useMemo(() => {
+    const set = new Set<string>();
+    schedules.forEach(s => {
+      if (s.Sede && typeof s.Sede === 'string' && s.Sede.trim()) {
+        set.add(s.Sede.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [schedules]);
+
+  const nivelesList: string[] = useMemo(() => {
+    const set = new Set<string>();
+    schedules.forEach(s => {
+      if (s.Nivel_Requerido && typeof s.Nivel_Requerido === 'string' && s.Nivel_Requerido.trim()) {
+        set.add(s.Nivel_Requerido.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [schedules]);
 
   // Data for Chart 1: Sede Bar Chart
   const sedeChartData = sedesList.map(sedeName => {
@@ -713,8 +730,8 @@ export const AdminDashboard: React.FC = () => {
               className="w-full px-3 py-2 bg-white/90 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
             >
               <option value="TODAS">📍 Todas las Sedes ({schedules.length})</option>
-              {sedesList.map(s => (
-                <option key={s} value={s}>{s}</option>
+              {sedesList.map((s, idx) => (
+                <option key={`opt-sede-${s}-${idx}`} value={s}>{s}</option>
               ))}
             </select>
           </div>
@@ -727,8 +744,8 @@ export const AdminDashboard: React.FC = () => {
               className="w-full px-3 py-2 bg-white/90 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
             >
               <option value="TODOS">🎓 Todos los Niveles</option>
-              {nivelesList.map(n => (
-                <option key={n} value={n}>{n}</option>
+              {nivelesList.map((n, idx) => (
+                <option key={`opt-nivel-${n}-${idx}`} value={n}>{n}</option>
               ))}
             </select>
           </div>
@@ -765,12 +782,12 @@ export const AdminDashboard: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredSchedules.map((item) => {
+                filteredSchedules.map((item, idx) => {
                   const pct = item.Cupo_Maximo > 0 ? Math.min(100, Math.round((item.Cupos_Ocupados / item.Cupo_Maximo) * 100)) : 0;
                   const isFull = item.Cupos_Ocupados >= item.Cupo_Maximo || item.Estado_Horario === 'Lleno';
 
                   return (
-                    <tr key={item.ID_Horario} className="hover:bg-white transition-colors group">
+                    <tr key={`sch-row-${item.ID_Horario || 'h'}-${idx}`} className="hover:bg-white transition-colors group">
                       
                       {/* Código */}
                       <td className="p-3.5 font-mono text-xs font-bold text-indigo-950 whitespace-nowrap">
@@ -993,10 +1010,10 @@ export const AdminDashboard: React.FC = () => {
                       item.ID_Espera.toLowerCase().includes(q)
                     );
                   })
-                  .map((item) => {
+                  .map((item, idx) => {
                     const friendlyTime = formatFriendlyTime(item.Horario);
                     return (
-                      <tr key={item.ID_Espera} className="hover:bg-purple-50/40 transition-colors">
+                      <tr key={`esp-row-${item.ID_Espera || 'esp'}-${idx}`} className="hover:bg-purple-50/40 transition-colors">
                         <td className="p-3.5">
                           <span className="font-mono font-bold text-purple-900 block">{item.ID_Espera}</span>
                           <span className="text-[10px] text-slate-400">{item.Fecha_Registro}</span>

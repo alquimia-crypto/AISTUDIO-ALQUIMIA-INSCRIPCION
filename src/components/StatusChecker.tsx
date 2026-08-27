@@ -280,8 +280,8 @@ export const StatusChecker: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {registrations.map((reg) => (
-                <div key={reg.ID_Registro} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+              {registrations.map((reg, idx) => (
+                <div key={`reg-card-${reg.ID_Registro || 'reg'}-${idx}`} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">

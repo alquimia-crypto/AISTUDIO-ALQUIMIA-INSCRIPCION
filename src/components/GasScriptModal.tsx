@@ -324,13 +324,13 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
                   <tr>
-                    {GOOGLE_SHEETS_STRUCTURE.tab1.headers.map(h => <th key={h} className="p-2 border border-slate-200">{h}</th>)}
+                    {GOOGLE_SHEETS_STRUCTURE.tab1.headers.map((h, hIdx) => <th key={`tab1-h-${h}-${hIdx}`} className="p-2 border border-slate-200">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {GOOGLE_SHEETS_STRUCTURE.tab1.sampleRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      {row.map((val, cIdx) => <td key={cIdx} className="p-2 border border-slate-100 text-slate-700">{val}</td>)}
+                    <tr key={`tab1-row-${idx}`} className="hover:bg-slate-50">
+                      {row.map((val, cIdx) => <td key={`tab1-c-${idx}-${cIdx}`} className="p-2 border border-slate-100 text-slate-700">{val}</td>)}
                     </tr>
                   ))}
                 </tbody>
@@ -358,13 +358,13 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
                   <tr>
-                    {GOOGLE_SHEETS_STRUCTURE.tab2.headers.map(h => <th key={h} className="p-2 border border-slate-200">{h}</th>)}
+                    {GOOGLE_SHEETS_STRUCTURE.tab2.headers.map((h, hIdx) => <th key={`tab2-h-${h}-${hIdx}`} className="p-2 border border-slate-200">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {GOOGLE_SHEETS_STRUCTURE.tab2.sampleRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      {row.map((val, cIdx) => <td key={cIdx} className="p-2 border border-slate-100 text-slate-700">{val}</td>)}
+                    <tr key={`tab2-row-${idx}`} className="hover:bg-slate-50">
+                      {row.map((val, cIdx) => <td key={`tab2-c-${idx}-${cIdx}`} className="p-2 border border-slate-100 text-slate-700">{val}</td>)}
                     </tr>
                   ))}
                 </tbody>
@@ -392,13 +392,13 @@ export const GasScriptModal: React.FC<GasScriptModalProps> = ({
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-100 text-slate-800 font-bold font-mono">
                   <tr>
-                    {GOOGLE_SHEETS_STRUCTURE.tab3.headers.map(h => <th key={h} className="p-2 border border-slate-200">{h}</th>)}
+                    {GOOGLE_SHEETS_STRUCTURE.tab3.headers.map((h, hIdx) => <th key={`tab3-h-${h}-${hIdx}`} className="p-2 border border-slate-200">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {GOOGLE_SHEETS_STRUCTURE.tab3.sampleRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      {row.map((val, cIdx) => <td key={cIdx} className="p-2 border border-slate-100 text-slate-700">{val}</td>)}
+                    <tr key={`tab3-row-${idx}`} className="hover:bg-slate-50">
+                      {row.map((val, cIdx) => <td key={`tab3-c-${idx}-${cIdx}`} className="p-2 border border-slate-100 text-slate-700">{val}</td>)}
                     </tr>
                   ))}
                 </tbody>

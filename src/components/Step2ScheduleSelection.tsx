@@ -253,9 +253,9 @@ export const Step2ScheduleSelection: React.FC<Step2Props> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sedesStats.map((item) => (
+            {sedesStats.map((item, idx) => (
               <div
-                key={item.sede}
+                key={`sede-card-${item.sede}-${idx}`}
                 onClick={() => setSelectedSede(item.sede)}
                 className="bg-white rounded-2xl p-6 border-2 border-slate-200/80 hover:border-purple-600 hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden"
               >
@@ -363,9 +363,9 @@ export const Step2ScheduleSelection: React.FC<Step2Props> = ({
                 >
                   Ver todos los días ({schedulesForCurrentSede.length})
                 </button>
-                {availableDaysInSede.map((day) => (
+                {availableDaysInSede.map((day, idx) => (
                   <button
-                    key={day.name}
+                    key={`filter-day-${day.name}-${idx}`}
                     type="button"
                     onClick={() => setSelectedDayFilter(day.name)}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
@@ -418,7 +418,7 @@ export const Step2ScheduleSelection: React.FC<Step2Props> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {displayedSchedules.map((sch) => {
+              {displayedSchedules.map((sch, idx) => {
                 const isSelected = selectedSchedules.some((s) => s.ID_Horario === sch.ID_Horario);
                 const isFull = sch.Cupos_Ocupados >= sch.Cupo_Maximo || sch.Estado_Horario === 'Lleno';
                 const remaining = Math.max(0, sch.Cupo_Maximo - sch.Cupos_Ocupados);
@@ -429,7 +429,7 @@ export const Step2ScheduleSelection: React.FC<Step2Props> = ({
 
                 return (
                   <div
-                    key={sch.ID_Horario}
+                    key={`sch-card-${sch.ID_Horario || 'horario'}-${idx}`}
                     onClick={() => !isFull && toggleSchedule(sch)}
                     className={`relative rounded-2xl p-5 border-2 transition-all cursor-pointer flex flex-col justify-between ${
                       isFull

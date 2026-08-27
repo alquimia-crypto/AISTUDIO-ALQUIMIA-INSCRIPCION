@@ -427,8 +427,8 @@ export const SheetInspector: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredRegistrations.map((row) => (
-                    <tr key={row.ID_Registro} className="hover:bg-slate-50">
+                  {filteredRegistrations.map((row, idx) => (
+                    <tr key={`reg-row-${row.ID_Registro || 'reg'}-${idx}`} className="hover:bg-slate-50">
                       <td className="p-3 font-mono font-bold text-slate-900">{row.ID_Registro}</td>
                       <td className="p-3 text-slate-500 whitespace-nowrap">{row.Fecha_Registro}</td>
                       <td className="p-3 font-mono">{row.ID_Cliente}</td>
@@ -522,8 +522,8 @@ export const SheetInspector: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredStudents.map((st) => (
-                    <tr key={st.ID_Cliente} className="hover:bg-slate-50">
+                  {filteredStudents.map((st, idx) => (
+                    <tr key={`st-row-${st.ID_Cliente || 'st'}-${idx}`} className="hover:bg-slate-50">
                       <td className="p-3 font-mono font-bold text-slate-900">{st.ID_Cliente}</td>
                       <td className="p-3 font-medium text-slate-800">{st.Nombre_Representante}</td>
                       <td className="p-3 text-slate-600">{st.Telefono_WhatsApp}</td>
@@ -596,8 +596,8 @@ export const SheetInspector: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredSchedules.map((sch) => (
-                    <tr key={sch.ID_Horario} className="hover:bg-slate-50">
+                  {filteredSchedules.map((sch, idx) => (
+                    <tr key={`sch-row-${sch.ID_Horario || 'sch'}-${idx}`} className="hover:bg-slate-50">
                       <td className="p-3 font-mono font-bold text-slate-900">{sch.ID_Horario}</td>
                       <td className="p-3 font-medium text-slate-800">{sch.Sede}</td>
                       <td className="p-3 font-semibold text-purple-900">{sch.Nivel_Requerido}</td>
